@@ -56,7 +56,10 @@ function subscribeCatalog(){
     const shared=snap.data()||{};
     const appData=shared.data||{};
     const rows=Array.isArray(appData.catalog)?appData.catalog:[];
-    catalog=rows.map((x,i)=>({id:String(x.catalogId||x.id||(`${x.name||"plant"}-${x.size||i}`)),...x}))
+    catalog=rows.map((x,i)=>({
+  ...x,
+  id:String(x.catalogId??x.id??(`${getName(x)}-${x.size??i}`))
+}))
       .filter(x=>x.deleted!==true&&x.active!==false&&x.hidden!==true);
     catalog.sort((a,b)=>getName(a).localeCompare(getName(b),"vi")||String(a.size||"").localeCompare(String(b.size||""),"vi"));
     renderPlantOptions();$("catalogCount").textContent=catalog.length+" dòng cây/quy cách đồng bộ";
