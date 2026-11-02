@@ -200,38 +200,88 @@ function renderOrders(){
 }
 function itemName(x){return x.plantName||x.name||x.productName||x.title||x.tenCay||"Chưa có tên cây";}
 function printOrder(o){
-  const pages=Array.from({length:Math.max(1,Math.min(99,Number(o.parcelCount)||1))},(_,i)=>`
-  <article class="ticket">
-    <header><strong>ROLL CÂY CẢNH</strong><span>ĐƠN NGOÀI</span></header>
-    <div class="order-code">${safe(o.orderNo)}</div>
-    <div class="line"><b>Người mua:</b> ${safe(o.buyerName)}</div>
-    <div class="line"><b>Điện thoại:</b> ${safe(o.buyerPhone)}</div>
-    <div class="line address"><b>Địa chỉ:</b> ${safe(o.buyerAddress)}</div>
-    <div class="parcel">KIỆN ${i+1}/${o.parcelCount||1}</div>
-    <div class="items">${(Array.isArray(o.items)?o.items:[]).map(x=>{const qty=Number(x.qty??x.quantity??x.soLuong??1),price=Number(x.price??x.unitPrice??x.donGia??0),lineTotal=Number(x.lineTotal??x.total??qty*price);return `<div class="item"><span><b>${safe(itemName(x))}</b>${x.size||x.quyCach?" · "+safe(x.size||x.quyCach):""} × ${qty}</span><b>${money(lineTotal)}</b></div>`;}).join("")}</div>
-    <div class="sum"><span>Tiền hàng</span><b>${money(o.subtotal)}</b></div>
-    <div class="sum"><span>Vận chuyển</span><b>${money(o.shippingFee)}</b></div>
-    <div class="total"><span>TỔNG BILL</span><b>${money(o.total)}</b></div>
-    <div class="line"><b>Số kiện:</b> ${o.parcelCount||1}</div>
-    <div class="line"><b>NV đóng hàng:</b> ${safe(o.packerName)}</div>
-    ${o.note?`<div class="note"><b>Ghi chú:</b> ${safe(o.note)}</div>`:""}
-    <footer>Ngày ${safe(o.orderDate)} · Phiếu ${i+1}/${o.parcelCount||1}</footer>
-  </article>`).join("");
+  const rows=(Array.isArray(o.items)?o.items:[]).map(x=>{
+    const qty=Number(x.qty??x.quantity??x.soLuong??1);
+    const price=Number(x.price??x.unitPrice??x.donGia??0);
+    const lineTotal=Number(x.lineTotal??x.total??qty*price);
+    const size=x.size||x.quyCach||x.specification||"";
+    return `<div class="item">
+      <div class="item-main">
+        <div class="plant-name">${safe(itemName(x))}</div>
+        <div class="item-meta">${size?`Quy cách: ${safe(size)} · `:""}SL: ${qty} · Đơn giá: ${money(price)}</div>
+      </div>
+      <b class="item-total">${money(lineTotal)}</b>
+    </div>`;
+  }).join("");
+  const html=`
+  <article class="ticket" id="ticket">
+    <div class="ticket-content" id="ticketContent">
+      <header><strong>ROLL CÂY CẢNH</strong><span>ĐƠN NGOÀI</span></header>
+      <div class="order-code">${safe(o.orderNo)}</div>
+      <div class="line"><b>Người mua:</b> ${safe(o.buyerName)}</div>
+      <div class="line"><b>Điện thoại:</b> ${safe(o.buyerPhone)}</div>
+      <div class="line address"><b>Địa chỉ:</b> ${safe(o.buyerAddress)}</div>
+      <div class="parcel">SỐ KIỆN: ${Number(o.parcelCount)||1}</div>
+      <div class="items">
+        <div class="items-heading">DANH SÁCH CÂY (${(o.items||[]).length} loại)</div>
+        ${rows||'<div class="empty-items">Không có thông tin sản phẩm</div>'}
+      </div>
+      <div class="sum"><span>Tiền hàng</span><b>${money(o.subtotal)}</b></div>
+      <div class="sum"><span>Vận chuyển</span><b>${money(o.shippingFee)}</b></div>
+      <div class="total"><span>TỔNG BILL</span><b>${money(o.total)}</b></div>
+      <div class="line"><b>Số kiện:</b> ${Number(o.parcelCount)||1}</div>
+      <div class="line"><b>NV đóng hàng:</b> ${safe(o.packerName)}</div>
+      ${o.note?`<div class="note"><b>Ghi chú:</b> ${safe(o.note)}</div>`:""}
+      <footer>Ngày ${safe(o.orderDate)} · ${safe(o.orderNo)}</footer>
+    </div>
+  </article>`;
   const w=window.open("","_blank","width=520,height=720");
   if(!w){toast("Trình duyệt chặn cửa sổ in. Cho phép pop-up rồi thử lại.");return;}
-  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
-  @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}body{margin:0;font:9pt Arial,sans-serif;color:#111}
-  .ticket{width:75mm;min-height:100mm;padding:4mm;page-break-after:always;overflow:visible;display:flex;flex-direction:column}
-  .ticket:last-child{page-break-after:auto}header{display:flex;justify-content:space-between;border-bottom:1px solid #222;padding-bottom:2mm;font-size:10pt}
-  .order-code{text-align:center;font-size:13pt;font-weight:bold;margin:2mm 0}.line{margin:1mm 0;line-height:1.25}.address{max-height:12mm;overflow:hidden}
-  .parcel{text-align:center;font-size:15pt;font-weight:bold;border:1.5px solid #111;padding:1.5mm;margin:2mm 0}
-  .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1.5mm 0;margin:1mm 0;flex:0 0 auto;min-height:8mm}
-  .item{display:flex;align-items:flex-start;justify-content:space-between;gap:2mm;font-size:8pt;line-height:1.25;padding:1mm 0}
-  .item span{flex:1;min-width:0;overflow-wrap:anywhere}.item b{white-space:nowrap;flex:0 0 auto}
-  .sum,.total{display:flex;justify-content:space-between;margin:1mm 0}.total{font-size:12pt;font-weight:bold;border-top:1px solid #111;padding-top:1.5mm}
-  .note{font-size:8pt;margin-top:1mm}footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:2mm;text-align:center;font-size:7pt}
+  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu đơn ngoài</title><style>
+  @page{size:75mm 100mm;margin:0}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;width:75mm;height:100mm;color:#111;font-family:Arial,sans-serif}
+  body{font-size:9pt}
+  .ticket{width:75mm;height:100mm;max-height:100mm;padding:3mm;overflow:hidden;page-break-after:avoid;break-after:avoid}
+  .ticket-content{width:100%;transform-origin:top left}
+  header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222;padding-bottom:1.5mm;font-size:1.05em}
+  .order-code{text-align:center;font-size:1.35em;font-weight:bold;margin:1.5mm 0}
+  .line{margin:1mm 0;line-height:1.2;overflow-wrap:anywhere}
+  .address{overflow-wrap:anywhere}
+  .parcel{text-align:center;font-size:1.35em;font-weight:bold;border:1px solid #111;padding:1.2mm;margin:1.5mm 0}
+  .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0}
+  .items-heading{font-weight:bold;font-size:.82em;margin-bottom:.8mm}
+  .item{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5mm;padding:.8mm 0;border-top:.2mm dotted #bbb;line-height:1.15;break-inside:avoid}
+  .item-main{min-width:0;flex:1}
+  .plant-name{font-weight:bold;overflow-wrap:anywhere}
+  .item-meta{font-size:.82em;overflow-wrap:anywhere}
+  .item-total{white-space:nowrap;font-size:.9em}
+  .sum,.total{display:flex;justify-content:space-between;gap:2mm;margin:1mm 0}
+  .total{font-size:1.2em;font-weight:bold;border-top:1px solid #111;padding-top:1.2mm}
+  .note{font-size:.85em;margin-top:1mm;overflow-wrap:anywhere}
+  footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:1.5mm;text-align:center;font-size:.78em}
   @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
-  </style></head><body>${pages}<script>window.onload=()=>setTimeout(()=>window.print(),350);<\/script></body></html>`);
+  </style></head><body>${html}<script>
+  function fitTicket(){
+    const ticket=document.getElementById("ticket");
+    const content=document.getElementById("ticketContent");
+    if(!ticket||!content)return;
+    content.style.zoom="1";
+    content.style.width="100%";
+    const available=ticket.clientHeight;
+    let scale=1;
+    for(let i=0;i<30;i++){
+      content.style.zoom=String(scale);
+      content.style.width=(100/scale)+"%";
+      const h=content.getBoundingClientRect().height;
+      if(h<=available-2)break;
+      scale*=.94;
+    }
+    content.style.zoom=String(Math.max(.42,scale));
+    content.style.width=(100/Math.max(.42,scale))+"%";
+  }
+  window.onload=()=>{fitTicket();setTimeout(()=>{fitTicket();window.print();},250);};
+  <\/script></body></html>`);
   w.document.close();
 }
 function resetCatalogForm(){
