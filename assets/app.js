@@ -10,10 +10,18 @@ function toast(s){const el=$("toast");el.textContent=s;el.classList.add("show");
 function safe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function getName(d){return d.name||d.plantName||d.title||d.productName||d.tenCay||d.ten||"Cây chưa đặt tên";}
 function getSizes(d){
-  const raw=d.sizes||d.sizeOptions||d.quyCach||d.kichThuoc||[];
-  if(Array.isArray(raw)) return raw.map(x=>typeof x==="string"?x:(x.name||x.size||x.label)).filter(Boolean);
-  if(typeof raw==="string") return raw.split(/[,;|]/).map(x=>x.trim()).filter(Boolean);
-  if(raw&&typeof raw==="object") return Object.keys(raw);
+  const fields=[d.sizes,d.sizeOptions,d.quyCach,d.kichThuoc];
+  for(const raw of fields){
+    let result=[];
+    if(Array.isArray(raw)){
+      result=raw.map(x=>typeof x==="string"?x:(x.name||x.size||x.label)).filter(Boolean);
+    }else if(typeof raw==="string"){
+      result=raw.split(/[,;|]/).map(x=>x.trim()).filter(Boolean);
+    }else if(raw&&typeof raw==="object"){
+      result=Object.keys(raw);
+    }
+    if(result.length) return [...new Set(result)];
+  }
   return d.size?[String(d.size)]:["Mặc định"];
 }
 function getPrice(d,size){
