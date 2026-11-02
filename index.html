@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#183d32">
+<title>ROLL ĐƠN NGOÀI</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+</head>
+<body>
+<div id="loginView" class="login-wrap">
+  <div class="login-card">
+    <div class="brand-mark">🌿</div><h1>ROLL ĐƠN NGOÀI</h1>
+    <p>Quản lý đơn hàng độc lập · ROLL CÂY CẢNH</p>
+    <label>Email<input id="email" type="email" autocomplete="username" placeholder="Email đăng nhập"></label>
+    <label>Mật khẩu<input id="password" type="password" autocomplete="current-password" placeholder="Mật khẩu"></label>
+    <button id="loginBtn" class="primary wide">Đăng nhập</button>
+    <div id="loginMessage" class="message"></div>
+    <small>Đăng nhập bằng tài khoản Firebase được cấp quyền.</small>
+  </div>
+</div>
+
+<div id="appView" class="app hidden">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark small">🌿</span><div><b>ROLL ĐƠN NGOÀI</b><small>QUẢN LÝ ĐƠN HÀNG</small></div></div>
+    <div class="top-actions"><span id="syncStatus" class="sync">● Chưa kết nối</span><span id="userEmail"></span><button id="logoutBtn" class="ghost">Thoát</button></div>
+  </header>
+  <nav class="tabs">
+    <button class="tab active" data-tab="create">＋ Tạo đơn</button>
+    <button class="tab" data-tab="orders">▤ Danh sách đơn</button>
+  </nav>
+
+  <main>
+    <section id="createTab" class="tab-panel">
+      <div class="page-heading"><div><h2>Tạo đơn hàng mới</h2><p>Thông tin khách hàng, sản phẩm và đóng kiện</p></div><span id="catalogCount" class="pill">Đang tải danh mục…</span></div>
+      <form id="orderForm">
+        <div class="panel">
+          <h3>1. Thông tin người mua</h3>
+          <div class="form-grid">
+            <label>Họ tên người mua *<input id="buyerName" required maxlength="120" placeholder="Tên khách hàng"></label>
+            <label>Số điện thoại *<input id="buyerPhone" required inputmode="tel" maxlength="30" placeholder="Số điện thoại"></label>
+            <label class="span2">Địa chỉ giao hàng *<textarea id="buyerAddress" required rows="2" maxlength="500" placeholder="Số nhà, đường, xã/phường, tỉnh/thành"></textarea></label>
+            <label>Ngày tạo đơn<input id="orderDate" type="date" required></label>
+            <label>Mã đơn ngoài<input id="orderNo" placeholder="Tự tạo nếu để trống"></label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-row"><h3>2. Sản phẩm</h3><input id="plantSearch" class="search" placeholder="Tìm tên cây trong danh mục…"></div>
+          <div class="product-add">
+            <label class="grow">Chọn cây<select id="plantSelect"><option value="">Đang tải danh mục…</option></select></label>
+            <label>Quy cách<select id="sizeSelect"><option value="">Chọn cây trước</option></select></label>
+            <label>Số lượng<input id="qtyInput" type="number" min="1" step="1" value="1"></label>
+            <label>Đơn giá (₫)<input id="priceInput" type="number" min="0" step="1" placeholder="0"></label>
+            <button type="button" id="addItemBtn" class="primary">Thêm cây</button>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>Cây</th><th>Quy cách</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th><th></th></tr></thead><tbody id="itemsBody"><tr><td colspan="6" class="empty">Chưa có sản phẩm</td></tr></tbody></table></div>
+        </div>
+
+        <div class="panel">
+          <h3>3. Thanh toán và đóng hàng</h3>
+          <div class="form-grid">
+            <label>Phí vận chuyển (₫)<input id="shippingFee" type="number" min="0" step="1" value="0"></label>
+            <label>Số kiện hàng *<input id="parcelCount" type="number" min="1" max="99" step="1" value="1" required></label>
+            <label>Tên nhân viên đóng hàng *<input id="packerName" required maxlength="120" placeholder="Tên nhân viên"></label>
+            <label>Ghi chú<textarea id="note" rows="2" maxlength="500" placeholder="Ghi chú đơn hàng"></textarea></label>
+          </div>
+          <div class="totals">
+            <div><span>Tiền hàng</span><b id="subtotal">0 ₫</b></div>
+            <div><span>Phí vận chuyển</span><b id="shippingTotal">0 ₫</b></div>
+            <div class="grand"><span>TỔNG BILL</span><strong id="grandTotal">0 ₫</strong></div>
+          </div>
+          <div class="form-actions"><button type="button" id="resetBtn" class="secondary">Làm mới</button><button type="submit" id="saveBtn" class="primary">Lưu đơn hàng</button></div>
+          <div id="formMessage" class="message"></div>
+        </div>
+      </form>
+    </section>
+
+    <section id="ordersTab" class="tab-panel hidden">
+      <div class="page-heading"><div><h2>Danh sách đơn ngoài</h2><p>Tra cứu, xem chi tiết và in lại phiếu kiện</p></div><button id="newOrderBtn" class="primary">＋ Tạo đơn</button></div>
+      <div class="panel">
+        <div class="filters"><input id="orderSearch" class="search" placeholder="Tìm mã đơn, tên hoặc số điện thoại"><input id="dateFilter" type="date"><button id="clearFilter" class="secondary">Xóa lọc</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Mã đơn</th><th>Ngày</th><th>Người mua</th><th>SĐT</th><th>Số kiện</th><th>Tổng bill</th><th>Nhân viên</th><th>Thao tác</th></tr></thead><tbody id="ordersBody"><tr><td colspan="8" class="empty">Đang tải đơn hàng…</td></tr></tbody></table></div>
+      </div>
+    </section>
+  </main>
+  <footer>ROLL ĐƠN NGOÀI · Danh mục đồng bộ trực tiếp từ ROLL CÂY CẢNH</footer>
+</div>
+<div id="toast" class="toast"></div>
+<script src="assets/app.js"></script>
+</body></html>
