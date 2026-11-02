@@ -51,9 +51,13 @@
         </div>
 
         <div class="panel">
-          <div class="section-row"><h3>2. Sản phẩm</h3><input id="plantSearch" class="search" placeholder="Tìm tên cây trong danh mục…"></div>
+          <div class="section-row"><h3>2. Sản phẩm</h3></div>
           <div class="product-add">
-            <label class="grow">Chọn cây<select id="plantSelect"><option value="">Đang tải danh mục…</option></select></label>
+            <label class="grow plant-picker">Chọn cây
+              <input id="plantSearch" type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="plantSuggestions" placeholder="Gõ vài chữ để tìm cây…">
+              <div id="plantSuggestions" class="plant-suggestions hidden" role="listbox"></div>
+              <select id="plantSelect" class="hidden" aria-hidden="true"><option value="">Đang tải danh mục…</option></select>
+            </label>
             <label>Quy cách<select id="sizeSelect"><option value="">Chọn cây trước</option></select></label>
             <label>Số lượng<input id="qtyInput" type="number" min="1" step="1" value="1"></label>
             <label>Đơn giá (₫)<input id="priceInput" type="number" min="0" step="1" placeholder="0"></label>
