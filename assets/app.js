@@ -159,8 +159,10 @@ function printOrder(o){
   .ticket:last-child{page-break-after:auto}header{display:flex;justify-content:space-between;border-bottom:1px solid #222;padding-bottom:2mm;font-size:10pt}
   .order-code{text-align:center;font-size:13pt;font-weight:bold;margin:2mm 0}.line{margin:1mm 0;line-height:1.25}.address{max-height:12mm;overflow:hidden}
   .parcel{text-align:center;font-size:15pt;font-weight:bold;border:1.5px solid #111;padding:1.5mm;margin:2mm 0}
-  .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0;flex:1;overflow:hidden}
-  .item{display:flex;justify-content:space-between;gap:2mm;font-size:8pt;padding:.7mm 0}.item span{max-width:48mm}
+ .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1.5mm 0;margin:1mm 0;flex:0 0 auto;min-height:8mm;overflow:visible}
+.item{display:flex;align-items:flex-start;justify-content:space-between;gap:2mm;font-size:8pt;line-height:1.25;padding:1mm 0;flex:0 0 auto}
+.item span{flex:1;min-width:0;max-width:none;overflow-wrap:anywhere}
+.item b{white-space:nowrap;flex:0 0 auto}
   .sum,.total{display:flex;justify-content:space-between;margin:1mm 0}.total{font-size:12pt;font-weight:bold;border-top:1px solid #111;padding-top:1.5mm}
   .note{font-size:8pt;margin-top:1mm}footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:2mm;text-align:center;font-size:7pt}
   @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
