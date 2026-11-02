@@ -125,7 +125,12 @@ function choosePlant(key){
 }
 function renderPlantOptions(filter=""){
   const sel=$("plantSelect"),old=sel.value,q=norm(filter);
-  const list=plantGroups.filter(g=>!q||norm(g.name).includes(q));
+  const list=plantGroups.filter(g=>{
+    if(!q)return true;
+    const name=norm(g.name);
+    // Match the typed phrase anywhere, and also match individual words.
+    return name.includes(q)||q.split(/\\s+/).every(part=>name.includes(part));
+  });
   sel.innerHTML='<option value="">-- Chọn cây --</option>'+plantGroups.map(g=>`<option value="${safe(g.key)}">${safe(g.name)}</option>`).join("");
   if(plantGroups.some(g=>g.key===old))sel.value=old;
   const box=$("plantSuggestions");
@@ -294,9 +299,24 @@ $("logoutBtn").onclick=()=>auth.signOut();
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>openTab(b.dataset.tab));
 $("plantSelect").onchange=()=>{const g=selectedGroup();if(g)$("plantSearch").value=g.name;updateSizeOptions();};
 $("sizeSelect").onchange=()=>{const g=selectedGroup(),r=selectedRow(g,$("sizeSelect").value);$("priceInput").value=r?getPrice(r,$("sizeSelect").value):0;};
-$("plantSearch").oninput=e=>{const current=selectedGroup();if(current&&norm(current.name)!==norm(e.target.value)){$("plantSelect").value="";updateSizeOptions();}renderPlantOptions(e.target.value);};
-$("plantSearch").onfocus=()=>{if(norm($("plantSearch").value))renderPlantOptions($("plantSearch").value);};
-$("plantSearch").onkeydown=e=>{if(e.key==="Escape")hidePlantSuggestions();else if(e.key==="Enter"){const first=$("plantSuggestions").querySelector("[data-plant-key]");if(first){e.preventDefault();choosePlant(first.dataset.plantKey);}}};
+$("plantSearch").addEventListener("input",e=>{
+  const current=selectedGroup();
+  if(current&&norm(current.name)!==norm(e.target.value)){
+    $("plantSelect").value="";
+    updateSizeOptions();
+  }
+  renderPlantOptions(e.target.value);
+});
+$("plantSearch").addEventListener("focus",()=>{
+  renderPlantOptions($("plantSearch").value||"");
+});
+$("plantSearch").addEventListener("keydown",e=>{
+  if(e.key==="Escape")hidePlantSuggestions();
+  else if(e.key==="Enter"){
+    const first=$("plantSuggestions").querySelector("[data-plant-key]");
+    if(first){e.preventDefault();choosePlant(first.dataset.plantKey);}
+  }
+});
 document.addEventListener("click",e=>{if(!e.target.closest(".plant-picker"))hidePlantSuggestions();});
 $("addItemBtn").onclick=addItem;$("shippingFee").oninput=totals;$("orderForm").onsubmit=saveOrder;$("resetBtn").onclick=resetForm;
 $("orderSearch").oninput=renderOrders;$("dateFilter").onchange=renderOrders;$("clearFilter").onclick=()=>{$("dateFilter").value="";$("orderSearch").value="";renderOrders();};

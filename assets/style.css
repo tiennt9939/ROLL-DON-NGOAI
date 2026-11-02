@@ -31,8 +31,8 @@ footer{text-align:center;color:#8a958e;font-size:11px;padding:25px}
 #externalCatalogBody td{vertical-align:middle}
 
 /* Inline plant autocomplete */
-.plant-picker{position:relative;flex:2 1 300px;min-width:220px}
-.plant-suggestions{position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;max-height:280px;overflow:auto;background:#fff;border:1px solid #cfdcd3;border-radius:11px;box-shadow:0 12px 28px #183d3220;padding:5px}
+.plant-picker{position:relative;z-index:40;flex:2 1 300px;min-width:220px}
+.plant-suggestions{position:absolute;z-index:1000;top:calc(100% + 4px);left:0;right:0;max-height:280px;overflow:auto;background:#fff;border:1px solid #cfdcd3;border-radius:11px;box-shadow:0 12px 28px #183d3220;padding:5px}
 .plant-suggestion{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:10px 11px;background:#fff;color:#20392e;text-align:left;border-radius:7px;white-space:normal}
 .plant-suggestion:hover,.plant-suggestion:focus{background:#edf5ef;outline:none}
 .plant-suggestion small{color:#78877d;font-size:11px;font-weight:400;white-space:nowrap}
