@@ -25,3 +25,7 @@ main{max-width:1200px;margin:24px auto;padding:0 18px}.page-heading{display:flex
 footer{text-align:center;color:#8a958e;font-size:11px;padding:25px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translate(-50%,20px);opacity:0;background:#203b30;color:white;padding:12px 18px;border-radius:10px;transition:.2s;pointer-events:none;z-index:10}.toast.show{opacity:1;transform:translate(-50%,0)}
 @media(max-width:700px){.topbar{align-items:flex-start}.top-actions{gap:7px;flex-wrap:wrap;justify-content:flex-end}.top-actions #userEmail{display:none}.tabs{padding:0 8px}.tab{padding:13px 12px;font-size:13px}main{margin:16px auto;padding:0 10px}.panel{padding:14px}.form-grid{grid-template-columns:1fr}.span2{grid-column:auto}.page-heading{align-items:flex-start}.page-heading h2{font-size:20px}.section-row{align-items:flex-start;flex-direction:column}.search{max-width:none;width:100%}.product-add{display:grid;grid-template-columns:1fr 1fr}.product-add .grow{grid-column:span 2}.product-add button{grid-column:span 2}.login-card{padding:24px}}
+
+.admin-only.hidden{display:none!important}
+#catalogForm small{font-weight:400;color:var(--muted);font-size:11px}
+#externalCatalogBody td{vertical-align:middle}
