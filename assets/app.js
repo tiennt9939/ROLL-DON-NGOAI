@@ -10,11 +10,15 @@ function toast(s){const el=$("toast");el.textContent=s;el.classList.add("show");
 function safe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function getName(d){return d.name||d.plantName||d.title||d.productName||d.tenCay||d.ten||"Cây chưa đặt tên";}
 function getSizes(d){
-  const fields=[d.sizes,d.sizeOptions,d.quyCach,d.kichThuoc];
+  const fields=[d.sizes,d.sizeOptions,d.quyCachList,d.kichThuocList];
+
   for(const raw of fields){
     let result=[];
     if(Array.isArray(raw)){
-      result=raw.map(x=>typeof x==="string"?x:(x.name||x.size||x.label)).filter(Boolean);
+      result=raw.map(x=>{
+        if(typeof x==="string"||typeof x==="number") return String(x);
+        return x?.name||x?.size||x?.label||x?.value||"";
+      }).filter(Boolean);
     }else if(typeof raw==="string"){
       result=raw.split(/[,;|]/).map(x=>x.trim()).filter(Boolean);
     }else if(raw&&typeof raw==="object"){
@@ -22,7 +26,10 @@ function getSizes(d){
     }
     if(result.length) return [...new Set(result)];
   }
-  return d.size?[String(d.size)]:["Mặc định"];
+
+  const name=getName(d);
+  const match=name.match(/\bC\s*[-_]?\s*\d+\b/i);
+  return match?[match[0].replace(/\s+/g,"").replace("-","").toUpperCase()]:["Chưa có quy cách"];
 }
 function getPrice(d,size){
   const maps=[d.sellPrices,d.sellPriceBySize,d.pricesBySize];
