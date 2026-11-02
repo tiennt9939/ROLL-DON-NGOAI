@@ -10,7 +10,7 @@ let unsubscribeAppCatalog=null, unsubscribeExternalCatalog=null, unsubscribeOrde
 function message(id,text,ok=false){const el=$(id);if(!el)return;el.textContent=text;el.className="message"+(ok?" ok":"");}
 function toast(s){const el=$("toast");el.textContent=s;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2600);}
 function safe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function norm(s){return String(s||"").trim().toLocaleLowerCase("vi").replace(/\s+/g," ");}
+function norm(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"d").trim().toLocaleLowerCase("vi").replace(/\s+/g," ");}
 function getName(d){return String(d.name||d.plantName||d.title||d.productName||d.tenCay||d.ten||"Cây chưa đặt tên").trim();}
 function getSizes(d){
   const raw=d.sizes||d.sizeOptions||d.quyCachList||d.kichThuocList||d.quyCach||d.kichThuoc||d.size;
@@ -116,11 +116,25 @@ function subscribeOrders(){
     orders=s.docs.map(d=>({id:d.id,...d.data()}));renderOrders();
   },e=>message("formMessage","Không tải được danh sách đơn: "+friendly(e)));
 }
+function hidePlantSuggestions(){
+  const box=$("plantSuggestions");box.classList.add("hidden");$("plantSearch").setAttribute("aria-expanded","false");
+}
+function choosePlant(key){
+  const g=plantGroups.find(x=>x.key===key);if(!g)return;
+  $("plantSelect").value=g.key;$("plantSearch").value=g.name;hidePlantSuggestions();updateSizeOptions();
+}
 function renderPlantOptions(filter=""){
   const sel=$("plantSelect"),old=sel.value,q=norm(filter);
   const list=plantGroups.filter(g=>!q||norm(g.name).includes(q));
-  sel.innerHTML='<option value="">-- Chọn cây --</option>'+list.map(g=>`<option value="${safe(g.key)}">${safe(g.name)}</option>`).join("");
-  if(list.some(g=>g.key===old))sel.value=old;
+  sel.innerHTML='<option value="">-- Chọn cây --</option>'+plantGroups.map(g=>`<option value="${safe(g.key)}">${safe(g.name)}</option>`).join("");
+  if(plantGroups.some(g=>g.key===old))sel.value=old;
+  const box=$("plantSuggestions");
+  if(q){
+    const matches=list.slice(0,30);
+    box.innerHTML=matches.length?matches.map(g=>`<button type="button" class="plant-suggestion" role="option" data-plant-key="${safe(g.key)}"><span>${safe(g.name)}</span><small>${g.rows.filter(r=>r.size).length} quy cách</small></button>`).join(""):'<div class="plant-no-results">Không tìm thấy cây phù hợp</div>';
+    box.classList.remove("hidden");$("plantSearch").setAttribute("aria-expanded","true");
+    box.querySelectorAll("[data-plant-key]").forEach(b=>b.onclick=()=>choosePlant(b.dataset.plantKey));
+  }else hidePlantSuggestions();
   updateSizeOptions();
 }
 function selectedGroup(){return plantGroups.find(g=>g.key===$("plantSelect").value);}
@@ -278,9 +292,12 @@ $("loginBtn").onclick=async()=>{try{await auth.signInWithEmailAndPassword($("ema
 $("password").addEventListener("keydown",e=>{if(e.key==="Enter")$("loginBtn").click();});
 $("logoutBtn").onclick=()=>auth.signOut();
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>openTab(b.dataset.tab));
-$("plantSelect").onchange=updateSizeOptions;
+$("plantSelect").onchange=()=>{const g=selectedGroup();if(g)$("plantSearch").value=g.name;updateSizeOptions();};
 $("sizeSelect").onchange=()=>{const g=selectedGroup(),r=selectedRow(g,$("sizeSelect").value);$("priceInput").value=r?getPrice(r,$("sizeSelect").value):0;};
-$("plantSearch").oninput=e=>renderPlantOptions(e.target.value);
+$("plantSearch").oninput=e=>{const current=selectedGroup();if(current&&norm(current.name)!==norm(e.target.value)){$("plantSelect").value="";updateSizeOptions();}renderPlantOptions(e.target.value);};
+$("plantSearch").onfocus=()=>{if(norm($("plantSearch").value))renderPlantOptions($("plantSearch").value);};
+$("plantSearch").onkeydown=e=>{if(e.key==="Escape")hidePlantSuggestions();else if(e.key==="Enter"){const first=$("plantSuggestions").querySelector("[data-plant-key]");if(first){e.preventDefault();choosePlant(first.dataset.plantKey);}}};
+document.addEventListener("click",e=>{if(!e.target.closest(".plant-picker"))hidePlantSuggestions();});
 $("addItemBtn").onclick=addItem;$("shippingFee").oninput=totals;$("orderForm").onsubmit=saveOrder;$("resetBtn").onclick=resetForm;
 $("orderSearch").oninput=renderOrders;$("dateFilter").onchange=renderOrders;$("clearFilter").onclick=()=>{$("dateFilter").value="";$("orderSearch").value="";renderOrders();};
 $("newOrderBtn").onclick=()=>openTab("create");
