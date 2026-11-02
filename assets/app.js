@@ -142,7 +142,7 @@ function printOrder(o){
     <div class="line"><b>Điện thoại:</b> ${safe(o.buyerPhone)}</div>
     <div class="line address"><b>Địa chỉ:</b> ${safe(o.buyerAddress)}</div>
     <div class="parcel">KIỆN ${i+1}/${o.parcelCount||1}</div>
-    <div class="items">${(o.items||[]).map(x=>`<div class="item"><span>$safe(x.plantName||x.name||x.productName||x.title||x.tenCay||x.ten||"Chưa có tên cây")} · ${safe(x.size||x.quyCach||"Chưa có quy cách")} × ${x.qty}</span><b>${money(x.lineTotal??x.qty*x.price)}</b></div>`).join("")}</div>
+    <div class="items">${(o.items||[]).map(x=>`<div class="item"><span>${safe(x.plantName||x.name||x.productName||x.title||x.tenCay||x.ten||"Chưa có tên cây")} · ${safe(x.size||x.quyCach||"Chưa có quy cách")} × ${x.qty}</span><b>${money(x.lineTotal??x.qty*x.price)}</b></div>`).join("")}</div>
     <div class="sum"><span>Tiền hàng</span><b>${money(o.subtotal)}</b></div>
     <div class="sum"><span>Vận chuyển</span><b>${money(o.shippingFee)}</b></div>
     <div class="total"><span>TỔNG BILL</span><b>${money(o.total)}</b></div>
