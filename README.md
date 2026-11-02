@@ -1,33 +1,34 @@
-# ROLL ĐƠN NGOÀI — bản website khởi tạo
+# ROLL ĐƠN NGOÀI — Danh mục cây độc lập
 
-## Đã có trong source
-- Đăng nhập Firebase Authentication (email/mật khẩu).
-- Đọc realtime danh mục từ đúng document app đang dùng: `/apps/roll-cay-canh` → `data.catalog` (chỉ đọc).
-- Tìm cây, chọn quy cách, lấy giá theo các trường catalog phổ biến, nhập số lượng và thêm nhiều dòng sản phẩm.
-- Tạo đơn ngoài với người mua, điện thoại, địa chỉ, ngày, mã đơn, phí ship, tổng bill, số kiện, nhân viên đóng hàng và ghi chú.
-- Lưu đơn vào collection riêng `externalOrders`; không ghi `packingOrders`, tồn kho, tiền công hay document app hiện hành.
-- Danh sách đơn và tìm kiếm.
-- In nhiều phiếu: đúng một kiện = một trang PDF/phiếu 75 × 100 mm, tự đánh số kiện 1/N.
+## Bản cập nhật này làm gì
+- Website tiếp tục đọc danh mục hiện có từ `apps/roll-cay-canh` → `data.catalog`.
+- Bổ sung collection riêng `externalCatalog` cho cây chỉ dùng trên website.
+- Danh mục tạo trên website không ghi ngược vào app ROLL CÂY CẢNH.
+- Cây trùng tên sẽ được gom thành một lựa chọn; quy cách riêng trên website được ưu tiên nếu trùng quy cách với danh mục app.
+- Admin có tab **Danh mục cây** để thêm, sửa, xóa cây và các quy cách.
+- Mỗi quy cách có thể có giá bán riêng; có thể để giá 0 và nhập giá khi tạo đơn.
+- Khi tạo đơn, quy cách là tùy chọn; tên cây/quy cách/số lượng được lưu vào từng item.
+- Danh sách đơn hiển thị tên cây, quy cách và số lượng; tìm kiếm cũng tìm theo sản phẩm.
+- Phiếu kiện in tên cây và quy cách từ dữ liệu đã lưu trong đơn.
 
-## Cấu hình bắt buộc
-1. Firebase Web App config của project `roll-cay-canh` đã được điền sẵn trong `firebase-config.js`.
-2. Bật Email/Password trong Firebase Authentication nếu chưa bật; dùng tài khoản đã có hồ sơ `/users/{uid}` và role `admin` hoặc `manager`.
-3. Chèn `firestore-rules-addition.txt` vào Rules hiện hành trước `match /{document=**}`, sau đó kiểm tra cú pháp và Publish. Không thay toàn bộ Rules.
-4. Thêm domain website vào Firebase Authentication → Settings → Authorized domains sau khi hosting có domain.
-5. Deploy thư mục này lên HTTPS hosting (Firebase Hosting được khuyến nghị).
+## Dữ liệu
+- Danh mục app cũ: `apps/roll-cay-canh.data.catalog` (chỉ đọc).
+- Danh mục website: `externalCatalog` (đọc cho user đang hoạt động, ghi chỉ admin).
+- Đơn ngoài: `externalOrders`.
+- Không ghi vào tồn kho, payroll, packingOrders hoặc schema app cũ.
 
-## Đường dẫn dữ liệu
-- Đọc catalog: `/apps/roll-cay-canh` → trường `data.catalog` (realtime, chỉ đọc).
-- Giá bán ưu tiên trường `sellPrice`; không tự lấy `price` vì đó là giá nhập/giá vốn trong app.
-- Ghi đơn ngoài: `/externalOrders/{autoId}`.
-- Không đọc/ghi `/apps/roll-cay-canh`, `/packingOrders`, `/inventory`, payroll hoặc các dữ liệu vận hành khác.
+## Triển khai
+1. Sao lưu/giữ lại bản source hiện tại của repository `ROLL-DON-NGOAI`.
+2. Upload toàn bộ nội dung thư mục `ROLL_DON_NGOAI` trong ZIP lên root repository `ROLL-DON-NGOAI`, ghi đè đúng các file cùng đường dẫn.
+3. Commit lên branch `main`, chờ GitHub Actions deploy Pages hoàn tất.
+4. Trong Firebase Console → Firestore Database → Rules, chèn nội dung `firestore-rules-addition.txt` bên trong match `/databases/{database}/documents` và trước `match /{document=**}`. Không thay toàn bộ Rules.
+5. Chỉ thêm block `match /externalCatalog/{plantId}` trong file này. Giữ nguyên block `externalOrders` đang có và tất cả Rules khác; tuyệt đối không thay toàn bộ Rules.
+6. Mở website, đăng nhập bằng tài khoản admin có `role: "admin"` (hoặc `isAdmin: true` trong `users/{uid}`), nhấn Ctrl+Shift+R.
+7. Tab **Danh mục cây** sẽ xuất hiện với tài khoản admin. Thêm cây, nhập quy cách phân cách bằng dấu phẩy, ví dụ `C6, C7, C9, C11`. Giá theo thứ tự tương ứng, ví dụ `12000, 15000, 20000, 25000`.
 
-## Lưu ý quan trọng trước production
-- Source đã được cấu hình với Firebase Web App config tìm thấy trong repository và đã sửa adapter theo cấu trúc app đang dùng: `/apps/roll-cay-canh.data.catalog`.
-- Workflow GitHub Pages đã được chuẩn bị, nhưng chưa thể chạy cho tới khi source được đưa vào một repository GitHub riêng và Pages được bật.
-- Chưa Publish Rules và chưa kiểm tra đăng nhập/đọc/ghi với Firebase production.
-- Website chỉ đọc catalog; không ghi thay đổi vào document `/apps/roll-cay-canh`.
-- Giá bán lấy từ `sellPrice`/bản đồ giá bán; không fallback sang `price` (giá nhập/giá vốn). Nếu cây chưa có giá bán, người tạo đơn nhập đơn giá thủ công.
-- Phiếu kiện hiện in thông tin tổng đơn trên mỗi kiện và số kiện `1/N`. Nếu cần chia từng mặt hàng vào từng kiện, phải bổ sung màn hình phân bổ sản phẩm theo kiện; hiện chưa tự đoán cây nào thuộc kiện nào.
-- Dùng trình duyệt Chrome/Edge, chọn máy in hoặc "Save as PDF"; kiểm tra khổ giấy tùy chỉnh 75 × 100 mm trong hộp thoại máy in.
-- Không đưa Firebase service-account/private key vào website.
+## Kiểm thử trước khi vận hành
+- Kiểm tra tài khoản admin nhìn thấy tab Danh mục cây.
+- Tạo thử một cây mới, ví dụ `Cẩm tú mai website test`, với các size `C6, C7, C9, C11`.
+- Mở tab Tạo đơn, tìm cây vừa tạo và kiểm tra các size.
+- Tạo một đơn thử và xác nhận tên cây/quy cách xuất hiện trong danh sách đơn và phiếu in.
+- Kiểm tra app ROLL CÂY CẢNH không bị thay đổi danh mục.

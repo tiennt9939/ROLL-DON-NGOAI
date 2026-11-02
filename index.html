@@ -32,6 +32,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="create">＋ Tạo đơn</button>
     <button class="tab" data-tab="orders">▤ Danh sách đơn</button>
+    <button class="tab admin-only hidden" data-tab="catalog">🌱 Danh mục cây</button>
   </nav>
 
   <main>
@@ -80,15 +81,35 @@
       </form>
     </section>
 
+    <section id="catalogTab" class="tab-panel hidden">
+      <div class="page-heading"><div><h2>Danh mục cây riêng</h2><p>Thêm và quản lý cây/quy cách cho ROLL ĐƠN NGOÀI, không ghi ngược vào app ROLL CÂY CẢNH.</p></div><span id="externalCatalogCount" class="pill">0 cây riêng</span></div>
+      <div class="panel">
+        <h3 id="catalogFormTitle">Thêm cây mới</h3>
+        <form id="catalogForm">
+          <div class="form-grid">
+            <label>Tên cây *<input id="externalPlantName" required maxlength="140" placeholder="Ví dụ: Cẩm tú mai"></label>
+            <label>Quy cách *<input id="externalPlantSizes" required maxlength="250" placeholder="Ví dụ: C6, C7, C9, C11"></label>
+            <label class="span2">Giá bán theo thứ tự quy cách (₫)<input id="externalPlantPrices" inputmode="numeric" placeholder="Ví dụ: 12000, 15000, 20000, 25000"><small>Không bắt buộc. Nhập các giá theo đúng thứ tự quy cách; có thể để trống để nhập giá khi tạo đơn.</small></label>
+          </div>
+          <div class="form-actions"><button type="button" id="cancelCatalogEdit" class="secondary hidden">Hủy sửa</button><button type="submit" id="saveCatalogBtn" class="primary">Lưu cây vào danh mục riêng</button></div>
+          <div id="catalogMessage" class="message"></div>
+        </form>
+      </div>
+      <div class="panel">
+        <div class="section-row"><h3>Danh sách cây riêng trên website</h3><input id="externalCatalogSearch" class="search" placeholder="Tìm tên cây…"></div>
+        <div class="table-wrap"><table><thead><tr><th>Tên cây</th><th>Quy cách</th><th>Giá bán</th><th>Thao tác</th></tr></thead><tbody id="externalCatalogBody"><tr><td colspan="4" class="empty">Đang tải danh mục…</td></tr></tbody></table></div>
+      </div>
+    </section>
+
     <section id="ordersTab" class="tab-panel hidden">
       <div class="page-heading"><div><h2>Danh sách đơn ngoài</h2><p>Tra cứu, xem chi tiết và in lại phiếu kiện</p></div><button id="newOrderBtn" class="primary">＋ Tạo đơn</button></div>
       <div class="panel">
         <div class="filters"><input id="orderSearch" class="search" placeholder="Tìm mã đơn, tên hoặc số điện thoại"><input id="dateFilter" type="date"><button id="clearFilter" class="secondary">Xóa lọc</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Mã đơn</th><th>Ngày</th><th>Người mua</th><th>SĐT</th><th>Số kiện</th><th>Tổng bill</th><th>Nhân viên</th><th>Thao tác</th></tr></thead><tbody id="ordersBody"><tr><td colspan="8" class="empty">Đang tải đơn hàng…</td></tr></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Mã đơn</th><th>Ngày</th><th>Người mua</th><th>SĐT</th><th>Sản phẩm</th><th>Số kiện</th><th>Tổng bill</th><th>Nhân viên</th><th>Thao tác</th></tr></thead><tbody id="ordersBody"><tr><td colspan="9" class="empty">Đang tải đơn hàng…</td></tr></tbody></table></div>
       </div>
     </section>
   </main>
-  <footer>ROLL ĐƠN NGOÀI · Danh mục đồng bộ trực tiếp từ ROLL CÂY CẢNH</footer>
+  <footer>ROLL ĐƠN NGOÀI · Danh mục kết hợp từ ROLL CÂY CẢNH và danh mục riêng của website</footer>
 </div>
 <div id="toast" class="toast"></div>
 <script src="assets/app.js"></script>

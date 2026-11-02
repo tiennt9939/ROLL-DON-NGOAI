@@ -22,5 +22,6 @@ window.ROLL_FIREBASE_CONFIG = {
 window.ROLL_COLLECTIONS = {
   catalogDoc: ["apps", "roll-cay-canh"],
   orders: "externalOrders",
+  externalCatalog: "externalCatalog",
   users: "users"
 };

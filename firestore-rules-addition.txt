@@ -1,20 +1,21 @@
-// ADD-ONLY RULE: chèn bên trong match /databases/{database}/documents
-// và TRƯỚC match /{document=**}. Không thay toàn bộ Rules hiện hành.
-// Catalog được website đọc qua match /apps/{appId} hiện có; chỉ đọc document.
-// Không cấp quyền ghi vào apps, packingOrders, inventory, payroll hoặc các collection cũ.
+// CHỈ THÊM block này vào Firestore Rules hiện hành,
+// bên trong match /databases/{database}/documents và TRƯỚC match /{document=**}.
+// Giữ nguyên block /externalOrders hiện có và mọi Rules khác.
 
-match /externalOrders/{orderId} {
-  allow read: if isAdmin() || (isActiveUser() && role() == 'manager');
-  allow create: if (isAdmin() || (isActiveUser() && role() == 'manager'))
+match /externalCatalog/{plantId} {
+  // User đang hoạt động và admin được đọc danh mục để tạo đơn.
+  allow read: if isAdmin() || isActiveUser();
+
+  // Chỉ admin được thêm/sửa/xóa danh mục riêng của website.
+  allow create, update: if isAdmin()
     && request.resource.data.source == 'ROLL_DON_NGOAI'
-    && request.resource.data.createdByUid == request.auth.uid
-    && request.resource.data.parcelCount is int
-    && request.resource.data.parcelCount >= 1
-    && request.resource.data.parcelCount <= 99
-    && request.resource.data.items is list
-    && request.resource.data.items.size() > 0
-    && request.resource.data.total is number
-    && request.resource.data.total >= 0;
-  // Phiên bản hiện tại chỉ tạo, đọc và in lại; chưa cho sửa/xóa đơn.
-  allow update, delete: if false;
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.sizes is list
+    && request.resource.data.sizes.size() > 0;
+
+  allow delete: if isAdmin();
 }
+
+// Các hàm isAdmin(), isActiveUser() phải là hàm đang có trong Rules hiện tại.
+// Không thay đổi quyền của apps, packingOrders, inventory, payroll hoặc externalOrders.
