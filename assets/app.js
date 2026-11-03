@@ -5,7 +5,7 @@ const money = n => new Intl.NumberFormat("vi-VN").format(Number(n)||0) + " ₫";
 const today = () => new Date().toLocaleDateString("en-CA");
 let db, auth, user=null, userProfile={}, isAdmin=false;
 let appCatalog=[], externalDocs=[], catalog=[], plantGroups=[], items=[], orders=[];
-let unsubscribeAppCatalog=null, unsubscribeExternalCatalog=null, unsubscribeOrders=null, editingCatalogId=null;
+let unsubscribeAppCatalog=null, unsubscribeExternalCatalog=null, unsubscribeOrders=null, editingCatalogId=null, editingOrderId=null;
 
 function message(id,text,ok=false){const el=$(id);if(!el)return;el.textContent=text;el.className="message"+(ok?" ok":"");}
 function toast(s){const el=$("toast");el.textContent=s;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2600);}
@@ -160,11 +160,19 @@ function renderParcelAmountInputs(preserve=true){
   const count=Number($("parcelCount").value);
   const old=preserve?[...document.querySelectorAll("[data-parcel-amount]")].map(x=>Number(x.value)||0):[];
   const safeCount=Number.isInteger(count)&&count>=1&&count<=99?count:1;
-  $("parcelAmountsInputs").innerHTML=Array.from({length:safeCount},(_,i)=>`<label>Kiện ${i+1} (₫)<input type="number" min="0" step="1" inputmode="numeric" data-parcel-amount="${i}" value="${old[i]??0}" placeholder="Nhập tiền kiện ${i+1}"></label>`).join("");
+  if(safeCount===1){
+    $("parcelAmountsInputs").innerHTML='<div class="single-parcel-note">Đơn chỉ có 1 kiện: tự động lấy toàn bộ tổng bill, không cần nhập thêm.</div>';
+    updateParcelAllocation();return;
+  }
+  $("parcelAmountsInputs").innerHTML=Array.from({length:safeCount},(_,i)=>`<label>Kiện ${i+1} (nghìn đồng)<div class="thousand-input"><input type="number" min="0" step="1" inputmode="numeric" data-parcel-amount="${i}" value="${old[i]??0}" placeholder="100"><span>.000 ₫</span></div></label>`).join("");
   $("parcelAmountsInputs").querySelectorAll("[data-parcel-amount]").forEach(input=>input.addEventListener("input",updateParcelAllocation));
   updateParcelAllocation();
 }
-function parcelAmounts(){return [...document.querySelectorAll("[data-parcel-amount]")].map(x=>Number(x.value)||0);}
+function parcelAmounts(){
+  const count=Number($("parcelCount").value);
+  if(count===1)return [orderTotal()];
+  return [...document.querySelectorAll("[data-parcel-amount]")].map(x=>(Number(x.value)||0)*1000);
+}
 function updateParcelAllocation(){
   if(!$("parcelAmountsInputs"))return;
   const values=parcelAmounts(),allocated=values.reduce((a,b)=>a+b,0),total=orderTotal(),delta=total-allocated;
@@ -194,7 +202,7 @@ function addItem(){
   renderItems();message("formMessage","",true);
 }
 function resetForm(){
-  $("orderForm").reset();$("orderDate").value=today();$("parcelCount").value=1;$("shippingFee").value=0;
+  editingOrderId=null;$("saveBtn").textContent="Lưu đơn hàng";$("orderForm").reset();$("orderDate").value=today();$("parcelCount").value=1;$("shippingFee").value=0;
   items=[];renderItems();renderParcelAmountInputs(false);renderPlantOptions($("plantSearch").value||"");message("formMessage","");
 }
 async function saveOrder(e){
@@ -205,25 +213,48 @@ async function saveOrder(e){
   if(!buyerName||!buyerPhone||!buyerAddress||!packerName)return message("formMessage","Vui lòng nhập đủ thông tin người mua và nhân viên đóng hàng.");
   if(!Number.isInteger(parcelCount)||parcelCount<1||parcelCount>99)return message("formMessage","Số kiện phải từ 1 đến 99.");
   const subtotal=items.reduce((a,x)=>a+x.qty*x.price,0),total=subtotal+shippingFee,allocations=parcelAmounts();
-  if(allocations.length!==parcelCount||allocations.some(x=>!Number.isSafeInteger(x)||x<0))return message("formMessage","Vui lòng nhập số tiền hợp lệ cho từng kiện.");
+  if(allocations.length!==parcelCount||allocations.some(x=>!Number.isSafeInteger(x)||x<0))return message("formMessage","Vui lòng nhập số tiền hợp lệ cho từng kiện (đơn vị nghìn đồng).");
   if(allocations.reduce((a,b)=>a+b,0)!==total)return message("formMessage",`Tổng tiền các kiện phải khớp tổng bill ${money(total)}. Hiện đã phân bổ ${money(allocations.reduce((a,b)=>a+b,0))}.`);
   const now=Date.now();
   const orderNo=$("orderNo").value.trim()||("DN"+today().replaceAll("-","")+"-"+String(now).slice(-6));
-  const payload={orderNo,buyerName,buyerPhone,buyerAddress,orderDate:$("orderDate").value,items:items.map(x=>({...x})),subtotal,shippingFee,total,parcelCount,parcelAmounts:allocations,packerName,note:$("note").value.trim(),status:"created",createdAtMs:now,createdByUid:user.uid,createdByEmail:user.email||"",updatedAtMs:now,source:"ROLL_DON_NGOAI",catalogPath:"apps/roll-cay-canh.data.catalog + externalCatalog"};
-  $("saveBtn").disabled=true;$("saveBtn").textContent="Đang lưu…";
-  try{await db.collection(window.ROLL_COLLECTIONS.orders).add(payload);toast("Đã lưu đơn "+orderNo);resetForm();openTab("orders");}
+  const oldOrder=editingOrderId?orders.find(x=>x.id===editingOrderId):null;
+  const payload={orderNo,buyerName,buyerPhone,buyerAddress,orderDate:$("orderDate").value,items:items.map(x=>({...x})),subtotal,shippingFee,total,parcelCount,parcelAmounts:allocations,packerName,note:$("note").value.trim(),status:oldOrder?.status||"created",packagingCompleted:oldOrder?.packagingCompleted===true,packagingCompletedAtMs:oldOrder?.packagingCompletedAtMs||null,createdAtMs:oldOrder?.createdAtMs||now,createdByUid:oldOrder?.createdByUid||user.uid,createdByEmail:oldOrder?.createdByEmail||user.email||"",updatedAtMs:now,source:"ROLL_DON_NGOAI",catalogPath:"apps/roll-cay-canh.data.catalog + externalCatalog"};
+  $("saveBtn").disabled=true;$("saveBtn").textContent=editingOrderId?"Đang cập nhật…":"Đang lưu…";
+  try{if(editingOrderId){await db.collection(window.ROLL_COLLECTIONS.orders).doc(editingOrderId).update(payload);toast("Đã cập nhật đơn "+orderNo);resetForm();}else{await db.collection(window.ROLL_COLLECTIONS.orders).add(payload);toast("Đã lưu đơn "+orderNo);resetForm();}openTab("orders");}
   catch(err){message("formMessage","Không lưu được đơn: "+friendly(err));}
-  finally{$("saveBtn").disabled=false;$("saveBtn").textContent="Lưu đơn hàng";}
+  finally{$("saveBtn").disabled=false;$("saveBtn").textContent=editingOrderId?"Cập nhật đơn hàng":"Lưu đơn hàng";}
 }
 function productSummary(o){return (o.items||[]).map(x=>`${x.plantName||x.name||x.productName||"Chưa có tên cây"}${x.size||x.quyCach?" · "+(x.size||x.quyCach):""} × ${x.qty||x.quantity||1}`).join("; ");}
 function renderOrders(){
   const q=norm($("orderSearch").value),date=$("dateFilter").value;
   const list=orders.filter(o=>(!date||o.orderDate===date)&&(!q||norm([o.orderNo,o.buyerName,o.buyerPhone,productSummary(o)].join(" ")).includes(q)));
-  $("ordersBody").innerHTML=list.length?list.map(o=>`<tr><td><b>${safe(o.orderNo)}</b></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}${Array.isArray(o.parcelAmounts)?`<small class="saved-parcel-amounts">${o.parcelAmounts.map((v,i)=>`Kiện ${i+1}: ${money(v)}`).join(" · ")}</small>`:""}</td><td>${safe(o.packerName)}</td><td><div class="order-print-actions"><button class="secondary" data-print="${safe(o.id)}">In phiếu kiện</button><button class="secondary" data-plant-print="${safe(o.id)}">In phiếu cây</button></div></td></tr>`).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
+  $("ordersBody").innerHTML=list.length?list.map(o=>{const done=o.packagingCompleted===true;return `<tr class="${done?'order-done':'order-pending'}"><td><b>${safe(o.orderNo)}</b><small class="packing-state ${done?'done':'pending'}">${done?'● Đã đóng gói':'● Chưa hoàn thành'}</small></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}${Array.isArray(o.parcelAmounts)?`<small class="saved-parcel-amounts">${o.parcelAmounts.map((v,i)=>`Kiện ${i+1}: ${money(v)}`).join(" · ")}</small>`:""}</td><td>${safe(o.packerName)}</td><td><div class="order-print-actions"><button class="secondary" data-print="${safe(o.id)}">In phiếu kiện</button><button class="secondary" data-plant-print="${safe(o.id)}">In phiếu cây</button><button class="${done?'secondary':'primary'}" data-toggle-done="${safe(o.id)}">${done?'Bỏ hoàn thành':'Đánh dấu xong'}</button><button class="secondary" data-edit-order="${safe(o.id)}">Sửa đơn</button><button class="danger" data-delete-order="${safe(o.id)}">Xóa đơn</button></div></td></tr>`;}).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
   $("ordersBody").querySelectorAll("[data-print]").forEach(b=>b.onclick=()=>{const o=orders.find(x=>x.id===b.dataset.print);if(o)printOrder(o);});
   $("ordersBody").querySelectorAll("[data-plant-print]").forEach(b=>b.onclick=()=>{const o=orders.find(x=>x.id===b.dataset.plantPrint);if(o)printPlantLabels(o);});
+  $("ordersBody").querySelectorAll("[data-toggle-done]").forEach(b=>b.onclick=()=>toggleOrderDone(b.dataset.toggleDone));
+  $("ordersBody").querySelectorAll("[data-edit-order]").forEach(b=>b.onclick=()=>editOrder(b.dataset.editOrder));
+  $("ordersBody").querySelectorAll("[data-delete-order]").forEach(b=>b.onclick=()=>deleteOrder(b.dataset.deleteOrder));
 }
-function itemName(x){return x.plantName||x.name||x.productName||x.title||x.tenCay||"Chưa có tên cây";}
+async function toggleOrderDone(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  const done=o.packagingCompleted!==true;
+  try{await db.collection(window.ROLL_COLLECTIONS.orders).doc(id).update({packagingCompleted:done,packagingCompletedAtMs:done?Date.now():null,packagingCompletedByUid:done?user.uid:null,updatedAtMs:Date.now()});toast(done?"Đã đánh dấu đơn hoàn thành đóng gói":"Đã chuyển đơn về chưa hoàn thành");}
+  catch(e){toast("Không cập nhật được trạng thái: "+friendly(e));}
+}
+function editOrder(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  editingOrderId=id;items=(o.items||[]).map(x=>({catalogId:x.catalogId||"",plantName:x.plantName||x.name||x.productName||"",size:x.size||x.quyCach||"",qty:Number(x.qty||x.quantity)||1,price:Number(x.price||x.unitPrice)||0,lineTotal:Number(x.lineTotal)||((Number(x.qty||x.quantity)||1)*(Number(x.price||x.unitPrice)||0))}));
+  $("buyerName").value=o.buyerName||"";$("buyerPhone").value=o.buyerPhone||"";$("buyerAddress").value=o.buyerAddress||"";$("orderDate").value=o.orderDate||today();$("orderNo").value=o.orderNo||"";$("shippingFee").value=Number(o.shippingFee)||0;$("parcelCount").value=Number(o.parcelCount)||1;$("packerName").value=o.packerName||"";$("note").value=o.note||"";
+  renderItems();renderParcelAmountInputs(false);
+  if(Number(o.parcelCount||1)>1){const vals=Array.isArray(o.parcelAmounts)?o.parcelAmounts:[];document.querySelectorAll("[data-parcel-amount]").forEach((el,i)=>el.value=Math.round((Number(vals[i])||0)/1000));updateParcelAllocation();}
+  $("saveBtn").textContent="Cập nhật đơn hàng";openTab("create");window.scrollTo({top:0,behavior:"smooth"});
+}
+async function deleteOrder(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  if(!confirm(`Bạn chắc chắn muốn xóa đơn ${o.orderNo||id}? Thao tác này không thể hoàn tác.`))return;
+  try{await db.collection(window.ROLL_COLLECTIONS.orders).doc(id).delete();toast("Đã xóa đơn "+(o.orderNo||""));}
+  catch(e){toast("Không xóa được đơn: "+friendly(e));}
+}
 function printOrder(o){
   const count=Math.max(1,Number(o.parcelCount)||1);
   const allocations=Array.isArray(o.parcelAmounts)&&o.parcelAmounts.length===count?o.parcelAmounts.map(x=>Number(x)||0):null;

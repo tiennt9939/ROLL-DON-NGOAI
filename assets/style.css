@@ -51,3 +51,13 @@ footer{text-align:center;color:#8a958e;font-size:11px;padding:25px}
 .saved-parcel-amounts{display:block;margin-top:4px;color:#52645a;font-size:11px;line-height:1.45}
 
 .order-print-actions{display:flex;flex-wrap:wrap;gap:6px}.order-print-actions button{white-space:nowrap}
+
+/* Parcel amount entry in thousand-VND units and packing status */
+.thousand-input{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden}
+.thousand-input input{min-width:0;flex:1;border:0!important;border-radius:0!important;box-shadow:none!important}
+.thousand-input span{padding:0 11px;color:var(--green);font-weight:700;white-space:nowrap;background:#f1f6f2;align-self:stretch;display:flex;align-items:center}
+.single-parcel-note{padding:11px 12px;border-radius:9px;background:#edf5ef;color:#245b3d;font-size:13px;font-weight:600}
+.packing-state{display:block;margin-top:4px;font-size:11px;font-weight:700}
+.packing-state.done{color:#168047}.packing-state.pending{color:#c62828}
+.order-pending td:first-child{border-left:3px solid #d32f2f}.order-done td:first-child{border-left:3px solid #168047}
+.order-print-actions .danger{background:#fff0f0;color:#b42318;border:1px solid #f1c5c5}
