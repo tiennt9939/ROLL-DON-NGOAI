@@ -275,131 +275,105 @@ async function deleteOrder(id){
   catch(e){toast("Không xóa được đơn: "+friendly(e));}
 }
 
-function openPrintPreview(html, title, fitFunctionName) {
-  const previous = document.getElementById("rollPrintPreview");
-  if (previous) previous.remove();
-
-  const overlay = document.createElement("div");
-  overlay.id = "rollPrintPreview";
-  overlay.style.cssText = "position:fixed;inset:0;z-index:2147483000;background:rgba(12,24,19,.72);display:flex;align-items:center;justify-content:center;padding:14px;";
-
-  overlay.innerHTML = `
-    <section style="width:min(560px,100%);height:min(92vh,900px);background:#fff;border-radius:14px;box-shadow:0 12px 40px #0005;display:flex;flex-direction:column;overflow:hidden;">
-      <header style="flex:none;padding:12px 16px;background:#173f32;color:#fff;display:flex;align-items:center;gap:10px;">
-        <strong style="font:700 15px Arial,sans-serif;flex:1">${safe(title)}</strong>
-        <button type="button" data-roll-close style="border:0;border-radius:8px;background:#fff;color:#173f32;padding:9px 12px;font-weight:700;cursor:pointer">Đóng</button>
-      </header>
-      <div style="flex:none;padding:9px 14px;background:#f1f5f2;color:#263b32;font:13px Arial,sans-serif">
-        Kiểm tra bản xem trước, sau đó bấm <b>IN NGAY</b>. Không cần cho phép pop-up.
-      </div>
-      <div style="flex:1;min-height:0;background:#d9dedb;padding:8px;overflow:auto;display:flex;justify-content:center;align-items:flex-start">
-        <iframe title="${safe(title)}" data-roll-preview-frame style="display:block;flex:none;width:75mm;height:100mm;min-width:75mm;min-height:100mm;max-width:none;border:0;background:#fff;border-radius:0"></iframe>
-      </div>
-      <footer style="flex:none;padding:12px 14px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid #e4e9e6">
-        <button type="button" data-roll-close style="border:1px solid #d4ddd8;border-radius:8px;background:#f3f6f4;color:#263b32;padding:11px 16px;font-weight:700;cursor:pointer">Hủy</button>
-        <button type="button" data-roll-print style="border:0;border-radius:8px;background:#173f32;color:#fff;padding:11px 22px;font-weight:700;cursor:pointer">IN NGAY</button>
-      </footer>
-    </section>`;
-
-  const oldOverflow = document.body.style.overflow;
-  document.body.style.overflow = "hidden";
-  document.body.appendChild(overlay);
-
-  const frame = overlay.querySelector("[data-roll-preview-frame]");
-  const close = () => {
-    document.body.style.overflow = oldOverflow;
-    overlay.remove();
-  };
-  overlay.querySelectorAll("[data-roll-close]").forEach(button => {
-    button.addEventListener("click", close);
-  });
-
-  frame.addEventListener("load", () => {
-    try {
-      const frameWindow = frame.contentWindow;
-      if (frameWindow && typeof frameWindow[fitFunctionName] === "function") {
-        frameWindow[fitFunctionName]();
-      }
-    } catch (error) {
-      console.warn("Print preview layout adjustment failed:", error);
-    }
-  }, { once: true });
-
-  overlay.querySelector("[data-roll-print]").addEventListener("click", () => {
-    try {
-      const frameWindow = frame.contentWindow;
-      if (!frameWindow) throw new Error("Không khởi tạo được bản xem trước.");
-      frameWindow.focus();
-      if (typeof frameWindow[fitFunctionName] === "function") {
-        frameWindow[fitFunctionName]();
-      }
-      frameWindow.print();
-    } catch (error) {
-      console.error("Print failed:", error);
-      toast("Không gọi được hộp thoại in. Hãy kiểm tra trình duyệt có cho phép in hay không.");
-    }
-  });
-
-  frame.srcdoc = html;
-  toast("Đã mở bản xem trước. Bấm IN NGAY để in.");
-}
-
 function printOrder(o){
-  const count=Math.max(1,Number(o.parcelCount)||1);
-  const allocations=Array.isArray(o.parcelAmounts)&&o.parcelAmounts.length===count?o.parcelAmounts.map(x=>Number(x)||0):null;
+  const count=Math.max(1,Math.min(99,Number(o.parcelCount)||1));
+  const allocations=Array.isArray(o.parcelAmounts)&&o.parcelAmounts.length===count
+    ?o.parcelAmounts.map(x=>Number(x)||0):null;
   const rows=(Array.isArray(o.items)?o.items:[]).map(x=>{
     const qty=Number(x.qty??x.quantity??x.soLuong??1);
     const price=Number(x.price??x.unitPrice??x.donGia??0);
     const lineTotal=Number(x.lineTotal??x.total??qty*price);
     const size=x.size||x.quyCach||x.specification||"";
-    return `<div class="item"><div class="item-main"><div class="plant-name">${safe(itemName(x))}</div><div class="item-meta">${size?`Quy cách: ${safe(size)} · `:""}SL: ${qty} · Đơn giá: ${money(price)}</div></div><b class="item-total">${money(lineTotal)}</b></div>`;
+    return `<div class="item"><span><b>${safe(itemName(x))}</b>${size?` · ${safe(size)}`:""} × ${qty}</span><b>${money(lineTotal)}</b></div>`;
   }).join("");
-  const tickets=(allocations?allocations:[null]).map((amount,index)=>`
-    <article class="ticket" id="ticket-${index}"><div class="ticket-content" id="ticketContent-${index}">
+  // Giữ hành vi bản đầu: mở một cửa sổ in riêng; mỗi phiếu là một trang 75×100 mm.
+  // Đơn mới có phân bổ tiền: mỗi kiện in đúng số tiền riêng. Đơn cũ chưa có phân bổ
+  // vẫn in một phiếu tổng, không tự chia tiền khi không có dữ liệu.
+  const tickets=(allocations?Array.from({length:count},(_,i)=>i):[null]).map(index=>{
+    const hasAllocation=index!==null;
+    const amount=hasAllocation?allocations[index]:null;
+    return `<article class="ticket">
       <header><strong>ROLL CÂY CẢNH</strong><span>ĐƠN NGOÀI</span></header>
       <div class="order-code">${safe(o.orderNo)}</div>
       <div class="line"><b>Người mua:</b> ${safe(o.buyerName)}</div>
       <div class="line"><b>Điện thoại:</b> ${safe(o.buyerPhone)}</div>
       <div class="line address"><b>Địa chỉ:</b> ${safe(o.buyerAddress)}</div>
-      <div class="parcel">${allocations?`KIỆN ${index+1} / ${count}`:`SỐ KIỆN: ${count}`}</div>
-      <div class="items"><div class="items-heading">DANH SÁCH CÂY (${(o.items||[]).length} loại)</div>${rows||'<div class="empty-items">Không có thông tin sản phẩm</div>'}</div>
-      ${allocations?`<div class="parcel-money"><span>TIỀN KIỆN NÀY</span><b>${money(amount)}</b></div>`:`<div class="sum"><span>Tiền hàng</span><b>${money(o.subtotal)}</b></div><div class="sum"><span>Vận chuyển</span><b>${money(o.shippingFee)}</b></div><div class="total"><span>TỔNG BILL</span><b>${money(o.total)}</b></div>`}
-      <div class="line"><b>NV đóng hàng:</b> ${safe(o.packerName)}</div>${o.note?`<div class="note"><b>Ghi chú:</b> ${safe(o.note)}</div>`:""}
+      <div class="parcel">${hasAllocation?`KIỆN ${index+1}/${count}`:`SỐ KIỆN: ${count}`}</div>
+      <div class="items"><div class="items-heading">DANH SÁCH CÂY (${(o.items||[]).length} loại)</div>${rows||'<div>Không có thông tin sản phẩm</div>'}</div>
+      ${hasAllocation?`<div class="parcel-money"><span>TIỀN KIỆN NÀY</span><b>${money(amount)}</b></div>`:`<div class="sum"><span>Tiền hàng</span><b>${money(o.subtotal)}</b></div><div class="sum"><span>Vận chuyển</span><b>${money(o.shippingFee)}</b></div><div class="total"><span>TỔNG BILL</span><b>${money(o.total)}</b></div>`}
+      <div class="line"><b>NV đóng hàng:</b> ${safe(o.packerName)}</div>
+      ${o.note?`<div class="note"><b>Ghi chú:</b> ${safe(o.note)}</div>`:""}
       <footer>Ngày ${safe(o.orderDate)} · ${safe(o.orderNo)}</footer>
-    </div></article>`).join("");
-  const printHtml = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
-  @media screen{.print-toolbar{position:sticky;top:0;z-index:9999;background:#173f32;color:white;padding:10px;text-align:center;font:14px Arial,sans-serif}.print-toolbar button{background:white;color:#173f32;border:0;border-radius:6px;padding:9px 18px;font-weight:bold;cursor:pointer}.print-toolbar span{margin-left:10px}}
-  @media print{.print-toolbar{display:none!important}}
-  </style><style>
-  @page{size:75mm 100mm!important;margin:0!important}*{box-sizing:border-box}html,body{display:block!important;margin:0!important;padding:0!important;width:75mm!important;height:100mm!important;min-width:75mm!important;min-height:100mm!important;max-width:75mm!important;overflow:hidden!important;color:#111;font-family:Arial,sans-serif}body{font-size:9pt}
-  .ticket{width:75mm;height:100mm;min-height:100mm;max-height:100mm;padding:3mm;overflow:hidden;page-break-after:always;break-after:page}.ticket:last-child{page-break-after:avoid;break-after:avoid}.ticket-content{display:flex;width:100%;height:94mm;min-height:0;flex-direction:column;justify-content:space-between;gap:1mm;overflow:hidden;transform:none!important;zoom:1!important}
-  header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222;padding-bottom:1.5mm;font-size:1.05em}.order-code{text-align:center;font-size:1.35em;font-weight:bold;margin:1.5mm 0}.line{margin:1mm 0;line-height:1.2;overflow-wrap:anywhere}.parcel{text-align:center;font-size:1.35em;font-weight:bold;border:1px solid #111;padding:1.2mm;margin:1.5mm 0}.items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1.5mm 0;margin:1mm 0;flex:1 0 auto;min-width:0}.items-heading{font-weight:bold;font-size:.82em;margin-bottom:.8mm}.item{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5mm;padding:.8mm 0;border-top:.2mm dotted #bbb;line-height:1.15;break-inside:avoid}.item-main{min-width:0;flex:1}.plant-name{font-weight:bold;overflow-wrap:anywhere}.item-meta{font-size:.82em;overflow-wrap:anywhere}.item-total{white-space:nowrap;font-size:.9em}.sum,.total{display:flex;justify-content:space-between;gap:2mm;margin:1mm 0}.total{font-size:1.2em;font-weight:bold;border-top:1px solid #111;padding-top:1.2mm}.parcel-money{border-top:1px solid #111;border-bottom:1px solid #111;padding:2mm 0;margin:2mm 0;display:flex;flex-direction:column;gap:1mm;text-align:center}.parcel-money span{font-size:.9em;font-weight:bold}.parcel-money b{font-size:1.55em}.note{font-size:.85em;margin-top:1mm;overflow-wrap:anywhere}footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:1.5mm;text-align:center;font-size:.78em}
-  @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}@media print{@page{size:75mm 100mm!important;margin:0!important}html,body{display:block!important;width:75mm!important;height:100mm!important;min-width:75mm!important;min-height:100mm!important;max-width:75mm!important;margin:0!important;padding:0!important;overflow:hidden!important}.ticket{width:75mm!important;height:100mm!important;min-height:100mm!important;margin:0!important;box-shadow:none!important;break-after:page;page-break-after:always}.ticket:last-child{break-after:avoid;page-break-after:avoid}}
-  </style></head><body><div class="print-toolbar"><button type="button" onclick="window.print()">IN PHIẾU</button><span>Nếu hộp thoại in không tự mở, hãy bấm nút này.</span></div>${tickets}<script>
-  function fitTickets(){document.querySelectorAll('.ticket-content').forEach(content=>{content.style.transform='none';content.style.zoom='1';content.style.width='100%';content.style.height='100%';content.style.minHeight='0';});}
-  window.fitTickets=fitTickets;<\/script></body></html>`;
-  openPrintPreview(printHtml, "Phiếu kiện · " + (o.orderNo || ""), "fitTickets");
+    </article>`;
+  }).join("");
+  const w=window.open("","_blank","width=520,height=720");
+  if(!w){toast("Chrome đang chặn cửa sổ in. Hãy cho phép pop-up từ website này rồi bấm in lại.");return;}
+  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
+  @page{size:75mm 100mm;margin:0}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font:9pt Arial,sans-serif;color:#111}
+  .ticket{width:75mm;height:100mm;padding:4mm;page-break-after:always;break-after:page;overflow:hidden;display:flex;flex-direction:column}
+  .ticket:last-child{page-break-after:auto;break-after:auto}
+  header{display:flex;justify-content:space-between;border-bottom:1px solid #222;padding-bottom:2mm;font-size:10pt}
+  .order-code{text-align:center;font-size:13pt;font-weight:bold;margin:2mm 0}
+  .line{margin:1mm 0;line-height:1.25;overflow-wrap:anywhere}
+  .address{max-height:12mm;overflow:hidden}
+  .parcel{text-align:center;font-size:15pt;font-weight:bold;border:1.5px solid #111;padding:1.5mm;margin:2mm 0}
+  .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0;flex:1;overflow:hidden}
+  .items-heading{font-weight:bold;font-size:8pt;margin-bottom:1mm}
+  .item{display:flex;justify-content:space-between;gap:2mm;font-size:8pt;padding:.7mm 0;line-height:1.15;break-inside:avoid}
+  .item span{max-width:48mm;overflow-wrap:anywhere}
+  .sum,.total{display:flex;justify-content:space-between;margin:1mm 0;gap:2mm}
+  .total{font-size:12pt;font-weight:bold;border-top:1px solid #111;padding-top:1.5mm}
+  .parcel-money{border-top:1px solid #111;border-bottom:1px solid #111;padding:2mm 0;margin:2mm 0;display:flex;flex-direction:column;gap:1mm;text-align:center}
+  .parcel-money span{font-size:8pt;font-weight:bold}.parcel-money b{font-size:15pt}
+  .note{font-size:8pt;margin-top:1mm;overflow-wrap:anywhere}
+  footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:2mm;text-align:center;font-size:7pt}
+  @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
+  @media print{.ticket{margin:0;box-shadow:none}}
+  </style></head><body>${tickets}<script>window.onload=()=>setTimeout(()=>{window.focus();window.print();},350);<\/script></body></html>`);
+  w.document.close();
 }
 
 function printPlantLabels(o){
-  const labels=[];
-  (Array.isArray(o.items)?o.items:[]).forEach(x=>{
-    const qty=Math.max(0,Math.floor(Number(x.qty??x.quantity??x.soLuong??1)||0));
-    const name=itemName(x),size=x.size||x.quyCach||x.specification||x.kichThuoc||"";
-    for(let i=0;i<qty;i++)labels.push({name,size});
-  });
-  if(!labels.length){toast("Đơn hàng chưa có số lượng cây hợp lệ để in.");return;}
-  if(labels.length>500){toast("Đơn có quá 500 cây. Vui lòng kiểm tra lại số lượng trước khi in.");return;}
-  const pages=labels.map((x,index)=>`<article class="label"><div class="label-content"><div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div><div class="plant-name">${safe(x.name)}</div><div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div><div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div><div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div><div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"Chưa có số điện thoại")}</b></div><div class="sequence">CÂY ${index+1} / ${labels.length}</div></div></article>`).join("");
-  const printHtml = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu cây</title><style>
-  @media screen{.print-toolbar{position:sticky;top:0;z-index:9999;background:#173f32;color:white;padding:10px;text-align:center;font:14px Arial,sans-serif}.print-toolbar button{background:white;color:#173f32;border:0;border-radius:6px;padding:9px 18px;font-weight:bold;cursor:pointer}.print-toolbar span{margin-left:10px}}
-  @media print{.print-toolbar{display:none!important}}
-  </style><style>
-  @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}.label{width:75mm;height:100mm;min-height:100mm;padding:5mm;overflow:hidden;page-break-after:always;break-after:page;display:block}.label:last-child{page-break-after:avoid;break-after:avoid}.label-content{display:flex;width:100%;height:90mm;min-height:0;flex-direction:column;justify-content:space-between;gap:2.5mm;overflow:hidden;transform:none!important;zoom:1!important}.brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}.plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:2mm 0}.plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm}.plant-size span,.order-no span,.customer span,.phone span{font-size:8pt;font-weight:bold}.plant-size b{font-size:16pt;overflow-wrap:anywhere}.order-no,.customer,.phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:1.5mm 0}.order-no b{font-size:16pt;overflow-wrap:anywhere}.customer b,.phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}.sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}@media screen{body{background:#ddd}.label{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}@media print{@page{size:75mm 100mm!important;margin:0!important}html,body{display:block!important;width:75mm!important;height:100mm!important;min-width:75mm!important;min-height:100mm!important;max-width:75mm!important;margin:0!important;padding:0!important;overflow:hidden!important}.label{width:75mm!important;height:100mm!important;min-height:100mm!important;margin:0!important;box-shadow:none!important;break-after:page;page-break-after:always}.label:last-child{break-after:avoid;page-break-after:avoid}}
-  </style></head><body><div class="print-toolbar"><button type="button" onclick="window.print()">IN PHIẾU</button><span>Nếu hộp thoại in không tự mở, hãy bấm nút này.</span></div>${pages}<script>
-  function fitLabels(){document.querySelectorAll('.label-content').forEach(content=>{content.style.transform='none';content.style.zoom='1';content.style.width='100%';content.style.height='100%';content.style.minHeight='0';});}
-  window.fitLabels=fitLabels;<\/script></body></html>`;
-  openPrintPreview(printHtml, "Phiếu cây · " + (o.orderNo || ""), "fitLabels");
+  const labels=(Array.isArray(o.items)?o.items:[]).map(x=>({
+    name:itemName(x),
+    size:x.size||x.quyCach||x.specification||x.kichThuoc||""
+  }));
+  if(!labels.length){toast("Đơn hàng chưa có thông tin cây để in.");return;}
+  if(labels.length>100){toast("Đơn có quá 100 loại cây. Vui lòng kiểm tra lại trước khi in.");return;}
+  const pages=labels.map((x,index)=>`<article class="label">
+    <div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div>
+    <div class="plant-name">${safe(x.name)}</div>
+    <div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div>
+    <div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div>
+    <div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div>
+    <div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"Chưa có số điện thoại")}</b></div>
+    <div class="sequence">CÂY ${index+1} / ${labels.length}</div>
+  </article>`).join("");
+  const w=window.open("","_blank","width=520,height=720");
+  if(!w){toast("Chrome đang chặn cửa sổ in. Hãy cho phép pop-up từ website này rồi bấm in lại.");return;}
+  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safe(o.orderNo)} - Phiếu cây</title><style>
+  @page{size:75mm 100mm;margin:0}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:Arial,sans-serif;color:#111}
+  .label{width:75mm;height:100mm;padding:5mm;overflow:hidden;page-break-after:always;break-after:page;display:flex;flex-direction:column}
+  .label:last-child{page-break-after:auto;break-after:auto}
+  .brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}
+  .plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:3mm 0}
+  .plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm;margin:1mm 0}
+  .plant-size span,.order-no span,.customer span,.phone span{font-size:8pt;font-weight:bold}
+  .plant-size b{font-size:16pt;overflow-wrap:anywhere}
+  .order-no,.customer,.phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:2mm 0}
+  .order-no b{font-size:16pt;overflow-wrap:anywhere}
+  .customer b,.phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}
+  .sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}
+  @media screen{body{background:#ddd}.label{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
+  @media print{.label{margin:0;box-shadow:none}}
+  </style></head><body>${pages}<script>window.onload=()=>setTimeout(()=>{window.focus();window.print();},350);<\/script></body></html>`);
+  w.document.close();
 }
 
 function resetCatalogForm(){
