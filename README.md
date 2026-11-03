@@ -32,3 +32,11 @@
 - Mở tab Tạo đơn, tìm cây vừa tạo và kiểm tra các size.
 - Tạo một đơn thử và xác nhận tên cây/quy cách xuất hiện trong danh sách đơn và phiếu in.
 - Kiểm tra app ROLL CÂY CẢNH không bị thay đổi danh mục.
+
+## Phân bổ tiền theo từng kiện (bản 03/11/2026)
+- Khi nhập số kiện, website tự tạo đúng số ô nhập tiền cho từng kiện.
+- Tổng phân bổ được cập nhật trực tiếp; không cho lưu nếu tổng tiền các kiện khác tổng bill (tiền hàng + phí vận chuyển).
+- Mỗi đơn mới lưu thêm mảng `parcelAmounts` trong chính document `externalOrders`; không thay đổi collection hay schema của app ROLL CÂY CẢNH.
+- Danh sách đơn vẫn hiển thị tổng bill và đồng thời hiển thị số tiền của từng kiện để đối soát.
+- Nút **In phiếu kiện** in một phiếu 75×100mm cho mỗi kiện. Mỗi phiếu chỉ hiển thị tiền của kiện tương ứng, không in tổng bill hoặc tiền các kiện khác.
+- Đơn cũ chưa có `parcelAmounts` vẫn có thể in theo mẫu cũ; không tự suy đoán cách chia tiền cho đơn cũ.

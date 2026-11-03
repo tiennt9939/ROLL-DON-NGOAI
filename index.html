@@ -74,6 +74,11 @@
             <label>Tên nhân viên đóng hàng *<input id="packerName" required maxlength="120" placeholder="Tên nhân viên"></label>
             <label>Ghi chú<textarea id="note" rows="2" maxlength="500" placeholder="Ghi chú đơn hàng"></textarea></label>
           </div>
+          <div id="parcelAmountsPanel" class="parcel-amounts-panel">
+            <div class="parcel-amounts-heading"><b>Phân bổ tiền theo từng kiện</b><small>Nhập số tiền riêng cho từng kiện. Tổng phân bổ phải khớp tổng bill.</small></div>
+            <div id="parcelAmountsInputs" class="parcel-amounts-grid"></div>
+            <div class="parcel-allocation-summary"><span>Tổng đã phân bổ</span><b id="parcelAllocatedTotal">0 ₫</b><span id="parcelAllocationStatus">Còn thiếu: 0 ₫</span></div>
+          </div>
           <div class="totals">
             <div><span>Tiền hàng</span><b id="subtotal">0 ₫</b></div>
             <div><span>Phí vận chuyển</span><b id="shippingTotal">0 ₫</b></div>
