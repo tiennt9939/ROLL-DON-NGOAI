@@ -229,8 +229,19 @@ function renderOrders(){
   const q=norm($("orderSearch").value),date=$("dateFilter").value;
   const list=orders.filter(o=>(!date||o.orderDate===date)&&(!q||norm([o.orderNo,o.buyerName,o.buyerPhone,productSummary(o)].join(" ")).includes(q)));
   $("ordersBody").innerHTML=list.length?list.map(o=>{const done=o.packagingCompleted===true;return `<tr class="${done?'order-done':'order-pending'}"><td><b>${safe(o.orderNo)}</b><small class="packing-state ${done?'done':'pending'}">${done?'● Đã đóng gói':'● Chưa hoàn thành'}</small></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}${Array.isArray(o.parcelAmounts)?`<small class="saved-parcel-amounts">${o.parcelAmounts.map((v,i)=>`Kiện ${i+1}: ${money(v)}`).join(" · ")}</small>`:""}</td><td>${safe(o.packerName)}</td><td><div class="order-print-actions"><button type="button" class="secondary" data-print="${safe(o.id)}">In phiếu kiện</button><button type="button" class="secondary" data-plant-print="${safe(o.id)}">In phiếu cây</button><button class="${done?'secondary':'primary'}" data-toggle-done="${safe(o.id)}">${done?'Bỏ hoàn thành':'Đánh dấu xong'}</button><button class="secondary" data-edit-order="${safe(o.id)}">Sửa đơn</button><button class="danger" data-delete-order="${safe(o.id)}">Xóa đơn</button></div></td></tr>`;}).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
-  $("ordersBody").querySelectorAll("[data-print]").forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const o=orders.find(x=>x.id===b.dataset.print);if(o)printOrder(o);});
-  $("ordersBody").querySelectorAll("[data-plant-print]").forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const o=orders.find(x=>x.id===b.dataset.plantPrint);if(o)printPlantLabels(o);});
+  // Delegated print handlers: remain active when the order table is re-rendered.
+  $("ordersBody").onclick=e=>{
+    const parcelBtn=e.target.closest("[data-print]");
+    const plantBtn=e.target.closest("[data-plant-print]");
+    if(!parcelBtn&&!plantBtn)return;
+    e.preventDefault();e.stopPropagation();
+    const btn=parcelBtn||plantBtn;
+    const id=parcelBtn?parcelBtn.getAttribute("data-print"):plantBtn.getAttribute("data-plant-print");
+    const o=orders.find(x=>String(x.id)===String(id));
+    if(!o){toast("Không tìm thấy dữ liệu đơn hàng để in.");return;}
+    toast(parcelBtn?"Đang chuẩn bị phiếu kiện…":"Đang chuẩn bị phiếu cây…");
+    if(parcelBtn)printOrder(o);else printPlantLabels(o);
+  };
   $("ordersBody").querySelectorAll("[data-toggle-done]").forEach(b=>b.onclick=()=>toggleOrderDone(b.dataset.toggleDone));
   $("ordersBody").querySelectorAll("[data-edit-order]").forEach(b=>b.onclick=()=>editOrder(b.dataset.editOrder));
   $("ordersBody").querySelectorAll("[data-delete-order]").forEach(b=>b.onclick=()=>deleteOrder(b.dataset.deleteOrder));
@@ -279,7 +290,7 @@ function printOrder(o){
       <footer>Ngày ${safe(o.orderDate)} · ${safe(o.orderNo)}</footer>
     </div></article>`).join("");
   const w=window.open("","_blank","width=520,height=720");
-  if(!w){toast("Trình duyệt đang chặn cửa sổ in. Hãy cho phép cửa sổ bật lên (Pop-ups) cho website rồi bấm in lại.");return;}
+  if(!w){toast("Chrome đang chặn cửa sổ in. Bấm biểu tượng cửa sổ bị chặn ở cạnh thanh địa chỉ và chọn Luôn cho phép pop-up từ website này.");return;}
   w.addEventListener("load",()=>{
     setTimeout(()=>{
       try{
@@ -311,7 +322,7 @@ function printPlantLabels(o){
   if(labels.length>500){toast("Đơn có quá 500 cây. Vui lòng kiểm tra lại số lượng trước khi in.");return;}
   const pages=labels.map((x,index)=>`<article class="label"><div class="label-content"><div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div><div class="plant-name">${safe(x.name)}</div><div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div><div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div><div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div><div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"Chưa có số điện thoại")}</b></div><div class="sequence">CÂY ${index+1} / ${labels.length}</div></div></article>`).join("");
   const w=window.open("","_blank","width=520,height=720");
-  if(!w){toast("Trình duyệt đang chặn cửa sổ in. Hãy cho phép cửa sổ bật lên (Pop-ups) cho website rồi bấm in lại.");return;}
+  if(!w){toast("Chrome đang chặn cửa sổ in. Bấm biểu tượng cửa sổ bị chặn ở cạnh thanh địa chỉ và chọn Luôn cho phép pop-up từ website này.");return;}
   w.addEventListener("load",()=>{
     setTimeout(()=>{
       try{
