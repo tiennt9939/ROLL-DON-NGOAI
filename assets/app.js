@@ -275,116 +275,183 @@ async function deleteOrder(id){
   catch(e){toast("Không xóa được đơn: "+friendly(e));}
 }
 
-function openInPagePrint(title, pagesHtml, pageStyles=""){
-  // In trang ngay trong tài liệu hiện tại: không mở popup/tab mới, tương thích Safari iPhone.
-  const oldRoot=document.getElementById("rollPrintRoot");
-  const oldStyle=document.getElementById("rollPrintStyle");
-  if(oldRoot)oldRoot.remove();
-  if(oldStyle)oldStyle.remove();
-
-  const style=document.createElement("style");
-  style.id="rollPrintStyle";
-  style.textContent=`
-    @page{size:75mm 100mm;margin:0}
-    @media screen{
-      body.roll-printing> :not(#rollPrintRoot){display:none!important}
-      #rollPrintRoot{position:fixed;inset:0;z-index:2147483000;overflow:auto;background:#e9eeeb;padding:10px 8px 24px;-webkit-overflow-scrolling:touch}
-      #rollPrintRoot .print-toolbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;background:#173f32;color:#fff;padding:10px;border-radius:10px;margin:0 auto 12px;max-width:600px;font:14px Arial,sans-serif}
-      #rollPrintRoot .print-toolbar button{background:#fff;color:#173f32;border:0;border-radius:7px;padding:10px 15px;font-weight:700;min-height:40px}
-      #rollPrintRoot .print-toolbar .close-print{background:#e8eee9;color:#25382e}
-      #rollPrintRoot .print-document{width:75mm;margin:0 auto}
-      #rollPrintRoot .print-page{background:#fff;box-shadow:0 2px 12px #0002;margin:0 auto 10px}
-    }
-    @media print{
-      html,body{width:75mm!important;min-width:75mm!important;margin:0!important;padding:0!important;background:#fff!important}
-      body.roll-printing> :not(#rollPrintRoot){display:none!important}
-      #rollPrintRoot{display:block!important;position:static!important;inset:auto!important;z-index:auto!important;width:75mm!important;height:auto!important;max-height:none!important;overflow:visible!important;margin:0!important;padding:0!important;background:#fff!important}
-      #rollPrintRoot .print-toolbar{display:none!important}
-      #rollPrintRoot .print-document{display:block!important;width:75mm!important;margin:0!important;padding:0!important}
-      #rollPrintRoot .print-page{display:block!important;width:75mm!important;height:100mm!important;min-height:100mm!important;max-height:100mm!important;margin:0!important;box-shadow:none!important;overflow:hidden!important;break-after:page;page-break-after:always}
-      #rollPrintRoot .print-page:last-child{break-after:auto!important;page-break-after:auto!important}
-    }
-    ${pageStyles}
-  `;
-  document.head.appendChild(style);
-
-  const root=document.createElement("section");
-  root.id="rollPrintRoot";
-  root.setAttribute("aria-label",title);
-  root.innerHTML=`<div class="print-toolbar"><b>${safe(title)}</b><button type="button" data-print-now>IN PHIẾU</button><button type="button" class="close-print" data-close-print>ĐÓNG</button><span>Đã tạo ${pagesHtml ? "đầy đủ nhãn" : "phiếu"}. Bấm IN PHIẾU nếu hộp in chưa tự hiện.</span></div><div class="print-document">${pagesHtml}</div>`;
-  document.body.appendChild(root);
-  document.body.classList.add("roll-printing");
-
-  root.querySelector("[data-print-now]").addEventListener("click",()=>{
-    // Gọi đồng bộ từ thao tác chạm của người dùng; Safari iOS không cần popup.
-    try{window.print();}catch(err){toast("Không gọi được chức năng in. Hãy thử nút IN PHIẾU lần nữa.");}
-  });
-  root.querySelector("[data-close-print]").addEventListener("click",()=>{
-    document.body.classList.remove("roll-printing");
-    root.remove();style.remove();
-  });
-
-  // Không dùng window.open(), iframe, popup hoặc setTimeout vì iPhone/Safari chặn popup.
-  try{window.print();}catch(err){toast("Không gọi được chức năng in. Hãy bấm IN PHIẾU ở thanh phía trên.");}
+// ==================== PRINT PDF ENGINE ====================
+// Render each label at 900x1200 px (~305 dpi), then package it in a PDF
+// whose MediaBox is exactly 75x100 mm. This avoids browser-specific HTML
+// print scaling on desktop, Android Chrome and iPad/iPhone Safari.
+const LABEL_PDF_WIDTH=900, LABEL_PDF_HEIGHT=1200;
+const LABEL_PDF_PAGE_W=75/25.4*72, LABEL_PDF_PAGE_H=100/25.4*72;
+function pdfCanvas(){
+  const c=document.createElement('canvas');c.width=LABEL_PDF_WIDTH;c.height=LABEL_PDF_HEIGHT;
+  const x=c.getContext('2d',{alpha:false});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+  x.fillStyle='#111';x.textBaseline='alphabetic';return {canvas:c,ctx:x};
 }
+function pdfWrap(ctx,text,maxWidth,fontSize,bold=true,maxLines=99){
+  const value=String(text??'').trim()||'—';
+  const weight=bold?'700':'400';
+  const setFont=size=>{ctx.font=`${weight} ${size}px Arial, sans-serif`;};
+  const wrap=size=>{
+    setFont(size);
+    const words=value.split(/\s+/);const lines=[];let line='';
+    const pushLongWord=(word)=>{
+      let part='';
+      for(const ch of word){
+        if(part&&ctx.measureText(part+ch).width>maxWidth){lines.push(part);part=ch;}else part+=ch;
+      }
+      return part;
+    };
+    for(let word of words){
+      if(ctx.measureText(word).width>maxWidth){
+        if(line){lines.push(line);line='';}
+        line=pushLongWord(word);continue;
+      }
+      const test=line?line+' '+word:word;
+      if(ctx.measureText(test).width>maxWidth){if(line)lines.push(line);line=word;}else line=test;
+    }
+    if(line)lines.push(line);
+    return lines.length?lines:['—'];
+  };
+  let size=fontSize,lines=wrap(size);
+  while(lines.length>maxLines&&size>20){size-=2;lines=wrap(size);}
+  return {lines,size,lineHeight:Math.round(size*1.2)};
+}
+function pdfDrawLines(ctx,text,x,y,maxWidth,fontSize,{bold=true,maxLines=99,align='left',color='#111'}={}){
+  const result=pdfWrap(ctx,text,maxWidth,fontSize,bold,maxLines);
+  ctx.fillStyle=color;ctx.textAlign=align;ctx.font=`${bold?'700':'400'} ${result.size}px Arial, sans-serif`;
+  result.lines.forEach((line,i)=>ctx.fillText(line,x,y+i*result.lineHeight));
+  ctx.textAlign='left';return y+result.lines.length*result.lineHeight;
+}
+function pdfRule(ctx,y,x=60,w=780,dashed=true){
+  ctx.save();ctx.strokeStyle='#888';ctx.lineWidth=2;ctx.setLineDash(dashed?[8,7]:[]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+w,y);ctx.stroke();ctx.restore();
+}
+function pdfDrawPlantLabel(data,index,total){
+  const {canvas,ctx}=pdfCanvas();const left=60,right=840,width=780;
+  ctx.textAlign='center';ctx.font='700 30px Arial,sans-serif';ctx.fillText('ROLL CÂY CẢNH · THÔNG TIN CÂY',450,68);ctx.textAlign='left';
+  pdfRule(ctx,100,left,width,false);
 
+  const plant=pdfWrap(ctx,data.name,width,72,true,2);
+  ctx.font=`700 ${plant.size}px Arial,sans-serif`;ctx.textAlign='center';
+  plant.lines.forEach((line,i)=>ctx.fillText(line,450,185+i*plant.lineHeight));ctx.textAlign='left';
+  const plantBottom=185+plant.lines.length*plant.lineHeight;
+
+  const boxY=Math.max(plantBottom+22,300),boxH=150;
+  ctx.save();ctx.lineWidth=3;ctx.strokeStyle='#111';ctx.strokeRect(left,boxY,width,boxH);ctx.textAlign='center';
+  ctx.font='700 30px Arial,sans-serif';ctx.fillText('QUY CÁCH / KÍCH THƯỚC',450,boxY+52);
+  const size=pdfWrap(ctx,data.size||'Chưa có thông tin',width-60,66,true,1);
+  ctx.font=`700 ${size.size}px Arial,sans-serif`;ctx.fillText(size.lines.join(' '),450,boxY+117);ctx.restore();
+
+  let y=boxY+boxH+54;
+  const field=(label,value,baseFont,maxLines=2)=>{
+    ctx.font='700 28px Arial,sans-serif';ctx.fillStyle='#111';ctx.fillText(label.toLocaleUpperCase('vi'),left,y);
+    const end=pdfDrawLines(ctx,value,left,y+58,width,baseFont,{bold:true,maxLines});
+    y=end+27;pdfRule(ctx,y-8,left,width,true);y+=18;
+  };
+  field('MÃ ĐƠN',data.orderNo||'—',58,2);
+  field('KHÁCH HÀNG',data.customer||'—',52,2);
+  field('SỐ ĐIỆN THOẠI',data.phone||'Chưa có số điện thoại',52,2);
+
+  ctx.save();ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(left,1080);ctx.lineTo(right,1080);ctx.stroke();
+  ctx.textAlign='center';ctx.font='700 32px Arial,sans-serif';ctx.fillStyle='#111';ctx.fillText(`CÂY ${index+1} / ${total}`,450,1135);ctx.restore();
+  return canvas;
+}
+function pdfDrawTicket(data){
+  const {canvas,ctx}=pdfCanvas();const left=55,width=790,right=845;
+  ctx.font='700 30px Arial,sans-serif';ctx.fillText('ROLL CÂY CẢNH',left,60);ctx.textAlign='right';ctx.font='700 26px Arial,sans-serif';ctx.fillText('ĐƠN NGOÀI',right,60);ctx.textAlign='left';
+  pdfRule(ctx,88,left,width,false);
+  ctx.textAlign='center';ctx.font='700 46px Arial,sans-serif';
+  const code=pdfWrap(ctx,data.orderNo||'—',width,46,true,1);ctx.fillText(code.lines[0],450,145);ctx.textAlign='left';
+
+  let y=205;
+  const smallField=(label,value,maxLines=2)=>{
+    ctx.font='700 24px Arial,sans-serif';ctx.fillText(label,left,y);
+    const end=pdfDrawLines(ctx,value,left+170,y, width-170,28,{bold:true,maxLines});
+    y=Math.max(y+34,end+10);
+  };
+  smallField('KHÁCH HÀNG',data.customer||'—',2);
+  smallField('ĐIỆN THOẠI',data.phone||'—',2);
+  smallField('ĐỊA CHỈ',data.address||'—',3);
+
+  const parcelText=data.parcelIndex==null?`SỐ KIỆN: ${data.parcelCount}`:`KIỆN ${data.parcelIndex+1}/${data.parcelCount}`;
+  y+=12;ctx.save();ctx.lineWidth=3;ctx.strokeStyle='#111';ctx.strokeRect(left,y,width,82);ctx.textAlign='center';ctx.font='700 40px Arial,sans-serif';ctx.fillText(parcelText,450,y+55);ctx.restore();y+=112;
+
+  ctx.font='700 25px Arial,sans-serif';ctx.fillText('DANH SÁCH CÂY',left,y);y+=18;pdfRule(ctx,y,left,width,true);y+=32;
+  const lines=data.items||[];
+  const itemFont=Math.max(18,Math.min(29,Math.floor(500/Math.max(1,lines.length))));
+  lines.forEach((item,i)=>{
+    const text=`${i+1}. ${item.name}${item.size?` · ${item.size}`:''} × ${item.qty}`;
+    const wrapped=pdfWrap(ctx,text,width-8,itemFont,true,2);
+    ctx.font=`700 ${wrapped.size}px Arial,sans-serif`;wrapped.lines.forEach((line,j)=>{ctx.fillText(line,left,y);y+=wrapped.lineHeight;});
+    if(item.lineTotal!=null){ctx.font='400 20px Arial,sans-serif';ctx.fillStyle='#333';ctx.fillText(money(item.lineTotal),left+8,y);y+=23;ctx.fillStyle='#111';}
+    y+=8;
+  });
+  y=Math.min(Math.max(y+10,780),900);pdfRule(ctx,y,left,width,false);y+=42;
+  if(data.parcelAmount!=null){
+    ctx.textAlign='center';ctx.font='700 25px Arial,sans-serif';ctx.fillText('TIỀN KIỆN NÀY',450,y);ctx.font='700 48px Arial,sans-serif';ctx.fillText(money(data.parcelAmount),450,y+58);ctx.textAlign='left';y+=95;
+  }else{
+    ctx.font='400 25px Arial,sans-serif';ctx.fillText(`Tiền hàng: ${money(data.subtotal)}`,left,y);y+=36;
+    ctx.fillText(`Vận chuyển: ${money(data.shippingFee)}`,left,y);y+=42;
+    ctx.font='700 34px Arial,sans-serif';ctx.fillText(`TỔNG BILL: ${money(data.total)}`,left,y);y+=48;
+  }
+  ctx.font='700 23px Arial,sans-serif';ctx.fillText(`NV ĐÓNG HÀNG: ${data.packer||'—'}`,left,Math.min(y+15,1080));
+  if(data.note){ctx.font='400 20px Arial,sans-serif';pdfDrawLines(ctx,`GHI CHÚ: ${data.note}`,left,Math.min(y+48,1110),width,20,{bold:false,maxLines:2});}
+  ctx.font='400 19px Arial,sans-serif';ctx.textAlign='center';ctx.fillText(`Ngày ${data.orderDate||''} · ${data.orderNo||''}`,450,1170);ctx.textAlign='left';
+  return canvas;
+}
+function pdfCanvasJpegBytes(canvas){
+  const encoded=canvas.toDataURL('image/jpeg',0.94).split(',')[1];
+  const binary=atob(encoded),bytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  return bytes;
+}
+function pdfPackJpegs(jpegs,fileName='ROLL-DON-NGOAI.pdf'){
+  const enc=s=>new TextEncoder().encode(s),objects=[];
+  const pageNums=jpegs.map((_,i)=>3+i*3);
+  objects.push([enc('<< /Type /Catalog /Pages 2 0 R /ViewerPreferences << /PrintScaling /None >> >>')]);
+  objects.push([enc(`<< /Type /Pages /Count ${jpegs.length} /Kids [${pageNums.map(n=>`${n} 0 R`).join(' ')}] >>`)]);
+  jpegs.forEach((jpeg,i)=>{
+    const p=pageNums[i],content=p+1,image=p+2;
+    objects.push([enc(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${LABEL_PDF_PAGE_W.toFixed(6)} ${LABEL_PDF_PAGE_H.toFixed(6)}] /CropBox [0 0 ${LABEL_PDF_PAGE_W.toFixed(6)} ${LABEL_PDF_PAGE_H.toFixed(6)}] /Resources << /XObject << /Im0 ${image} 0 R >> >> /Contents ${content} 0 R >>`)]);
+    const stream=enc(`q ${LABEL_PDF_PAGE_W.toFixed(6)} 0 0 ${LABEL_PDF_PAGE_H.toFixed(6)} 0 0 cm /Im0 Do Q`);
+    objects.push([enc(`<< /Length ${stream.length} >>\nstream\n`),stream,enc('\nendstream')]);
+    objects.push([enc(`<< /Type /XObject /Subtype /Image /Width ${LABEL_PDF_WIDTH} /Height ${LABEL_PDF_HEIGHT} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Interpolate true /Length ${jpeg.length} >>\nstream\n`),jpeg,enc('\nendstream')]);
+  });
+  const safeTitle=String(fileName||'ROLL-DON-NGOAI.pdf').replace(/[\\()]/g,'_').replace(/[^\x20-\x7E]/g,'_');
+  objects.push([enc(`<< /Title (${safeTitle}) /Author (ROLL DON NGOAI) /Producer (ROLL DON NGOAI PDF Engine) >>`)]);
+  const infoNum=objects.length;
+  const chunks=[];let offset=0;const offsets=[0];
+  const add=chunk=>{chunks.push(chunk);offset+=chunk.length;};
+  add(enc('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'));
+  objects.forEach((parts,i)=>{offsets.push(offset);add(enc(`${i+1} 0 obj\n`));parts.forEach(add);add(enc('\nendobj\n'));});
+  const xref=offset;add(enc(`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`));
+  for(let i=1;i<offsets.length;i++)add(enc(`${String(offsets[i]).padStart(10,'0')} 00000 n \n`));
+  add(enc(`trailer\n<< /Size ${objects.length+1} /Root 1 0 R /Info ${infoNum} 0 R >>\nstartxref\n${xref}\n%%EOF`));
+  return new Blob(chunks,{type:'application/pdf'});
+}
+function openPrintPdf(jpegs,fileName){
+  try{
+    const blob=pdfPackJpegs(jpegs,fileName);const url=URL.createObjectURL(blob);
+    // Open PDF in the current tab: no popup, no iframe, works with iOS Safari's PDF viewer.
+    window.location.assign(url);
+  }catch(error){console.error('PDF print error',error);toast('Không tạo được PDF. Hãy tải lại trang và thử lại.');}
+}
 function printOrder(o){
   const count=Math.max(1,Math.min(99,Number(o.parcelCount)||1));
-  const allocations=Array.isArray(o.parcelAmounts)&&o.parcelAmounts.length===count
-    ?o.parcelAmounts.map(x=>Number(x)||0):null;
-  const rows=(Array.isArray(o.items)?o.items:[]).map(x=>{
-    const qty=Number(x.qty??x.quantity??x.soLuong??1);
-    const price=Number(x.price??x.unitPrice??x.donGia??0);
-    const lineTotal=Number(x.lineTotal??x.total??qty*price);
-    const size=x.size||x.quyCach||x.specification||"";
-    return `<div class="item"><span><b>${safe(itemName(x))}</b>${size?` · ${safe(size)}`:""} × ${qty}</span><b>${money(lineTotal)}</b></div>`;
-  }).join("");
-  // Mỗi phiếu kiện là một trang riêng; dữ liệu phân bổ tiền theo kiện được giữ nguyên.
-  const tickets=(allocations?Array.from({length:count},(_,i)=>i):[null]).map(index=>{
-    const hasAllocation=index!==null;
-    const amount=hasAllocation?allocations[index]:null;
-    return `<article class="ticket print-page">
-      <header><strong>ROLL CÂY CẢNH</strong><span>ĐƠN NGOÀI</span></header>
-      <div class="order-code">${safe(o.orderNo)}</div>
-      <div class="line"><b>Người mua:</b> ${safe(o.buyerName)}</div>
-      <div class="line"><b>Điện thoại:</b> ${safe(o.buyerPhone)}</div>
-      <div class="line address"><b>Địa chỉ:</b> ${safe(o.buyerAddress)}</div>
-      <div class="parcel">${hasAllocation?`KIỆN ${index+1}/${count}`:`SỐ KIỆN: ${count}`}</div>
-      <div class="items"><div class="items-heading">DANH SÁCH CÂY (${(o.items||[]).length} loại)</div>${rows||'<div>Không có thông tin sản phẩm</div>'}</div>
-      ${hasAllocation?`<div class="parcel-money"><span>TIỀN KIỆN NÀY</span><b>${money(amount)}</b></div>`:`<div class="sum"><span>Tiền hàng</span><b>${money(o.subtotal)}</b></div><div class="sum"><span>Vận chuyển</span><b>${money(o.shippingFee)}</b></div><div class="total"><span>TỔNG BILL</span><b>${money(o.total)}</b></div>`}
-      <div class="line"><b>NV đóng hàng:</b> ${safe(o.packerName)}</div>
-      ${o.note?`<div class="note"><b>Ghi chú:</b> ${safe(o.note)}</div>`:""}
-      <footer>Ngày ${safe(o.orderDate)} · ${safe(o.orderNo)}</footer>
-    </article>`;
-  }).join("");
-  const css=`
-    #rollPrintRoot .ticket{padding:4mm;display:flex;flex-direction:column;font:9pt Arial,sans-serif;color:#111;box-sizing:border-box}
-    #rollPrintRoot .ticket *{box-sizing:border-box}
-    #rollPrintRoot .ticket header{display:flex;justify-content:space-between;border-bottom:1px solid #222;padding-bottom:2mm;font-size:10pt}
-    #rollPrintRoot .ticket .order-code{text-align:center;font-size:13pt;font-weight:bold;margin:2mm 0}
-    #rollPrintRoot .ticket .line{margin:1mm 0;line-height:1.25;overflow-wrap:anywhere}
-    #rollPrintRoot .ticket .address{max-height:12mm;overflow:hidden}
-    #rollPrintRoot .ticket .parcel{text-align:center;font-size:15pt;font-weight:bold;border:1.5px solid #111;padding:1.5mm;margin:2mm 0}
-    #rollPrintRoot .ticket .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0;flex:1;overflow:hidden}
-    #rollPrintRoot .ticket .items-heading{font-weight:bold;font-size:8pt;margin-bottom:1mm}
-    #rollPrintRoot .ticket .item{display:flex;justify-content:space-between;gap:2mm;font-size:8pt;padding:.7mm 0;line-height:1.15;break-inside:avoid}
-    #rollPrintRoot .ticket .item span{max-width:48mm;overflow-wrap:anywhere}
-    #rollPrintRoot .ticket .sum,#rollPrintRoot .ticket .total{display:flex;justify-content:space-between;margin:1mm 0;gap:2mm}
-    #rollPrintRoot .ticket .total{font-size:12pt;font-weight:bold;border-top:1px solid #111;padding-top:1.5mm}
-    #rollPrintRoot .ticket .parcel-money{border-top:1px solid #111;border-bottom:1px solid #111;padding:2mm 0;margin:2mm 0;display:flex;flex-direction:column;gap:1mm;text-align:center}
-    #rollPrintRoot .ticket .parcel-money span{font-size:8pt;font-weight:bold}
-    #rollPrintRoot .ticket .parcel-money b{font-size:15pt}
-    #rollPrintRoot .ticket .note{font-size:8pt;margin-top:1mm;overflow-wrap:anywhere}
-    #rollPrintRoot .ticket footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:2mm;text-align:center;font-size:7pt}
-  `;
-  openInPagePrint("Phiếu kiện · "+(o.orderNo||""),tickets,css);
+  const allocations=Array.isArray(o.parcelAmounts)&&o.parcelAmounts.length===count?o.parcelAmounts.map(x=>Number(x)||0):null;
+  const rows=(Array.isArray(o.items)?o.items:[]).map(x=>({
+    name:itemName(x),size:x.size||x.quyCach||x.specification||'',qty:Number(x.qty??x.quantity??x.soLuong??1),
+    lineTotal:Number(x.lineTotal??x.total??(Number(x.qty??x.quantity??x.soLuong??1)*Number(x.price??x.unitPrice??x.donGia??0)))
+  }));
+  const indexes=allocations?Array.from({length:count},(_,i)=>i):[null];
+  const jpegs=indexes.map(index=>pdfCanvasJpegBytes(pdfDrawTicket({
+    orderNo:o.orderNo,customer:o.buyerName,phone:o.buyerPhone,address:o.buyerAddress,
+    parcelIndex:index,parcelCount:count,items:rows,
+    parcelAmount:index===null?null:allocations[index],subtotal:o.subtotal,shippingFee:o.shippingFee,total:o.total,
+    packer:o.packerName,note:o.note,orderDate:o.orderDate
+  })));
+  openPrintPdf(jpegs,`ROLL-PHIEU-KIEN-${o.orderNo||'DON'}.pdf`);
 }
-
 function printPlantLabels(o){
-  // PHIẾU CÂY LÀ PHIẾU RIÊNG CỦA TOÀN ĐƠN:
-  // - Không đọc parcelCount / parcelAmounts.
-  // - Tổng số nhãn = tổng số lượng cây của tất cả dòng sản phẩm trong đơn.
-  // - Mỗi cây thực tế tạo đúng một nhãn, bất kể đơn được chia thành bao nhiêu kiện.
+  // Phiếu cây độc lập theo tổng số cây cả đơn; tuyệt đối không chia theo kiện.
   const sourceItems=Array.isArray(o.items)?o.items:[];
   const getPlantQty=x=>{
     const candidates=[x.qty,x.quantity,x.soLuong,x.count];
@@ -392,42 +459,18 @@ function printPlantLabels(o){
     const value=raw===undefined?1:Number(String(raw).trim().replace(',','.'));
     return Number.isFinite(value)&&value>0?Math.floor(value):0;
   };
-  const plantRows=sourceItems.map(x=>({
-    name:itemName(x),
-    size:x.size||x.quyCach||x.specification||x.kichThuoc||'',
-    qty:getPlantQty(x)
-  })).filter(x=>x.qty>0);
+  const plantRows=sourceItems.map(x=>({name:itemName(x),size:x.size||x.quyCach||x.specification||x.kichThuoc||'',qty:getPlantQty(x)})).filter(x=>x.qty>0);
   const totalPlants=plantRows.reduce((sum,x)=>sum+x.qty,0);
-  if(!totalPlants){toast("Đơn hàng chưa có số lượng cây hợp lệ để in.");return;}
-  if(totalPlants>500){toast("Đơn có quá 500 cây. Vui lòng kiểm tra lại số lượng trước khi in.");return;}
-
-  const labels=[];
-  plantRows.forEach(row=>{
-    for(let i=0;i<row.qty;i++)labels.push({name:row.name,size:row.size});
-  });
-  const pages=labels.map((x,index)=>`<article class="label print-page">
-    <div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div>
-    <div class="plant-name">${safe(x.name)}</div>
-    <div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div>
-    <div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div>
-    <div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div>
-    <div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"Chưa có số điện thoại")}</b></div>
-    <div class="sequence">CÂY ${index+1} / ${totalPlants}</div>
-  </article>`).join("");
-  const css=`
-    #rollPrintRoot .label{padding:5mm;display:flex;flex-direction:column;color:#111;font-family:Arial,sans-serif}
-    #rollPrintRoot .label *{box-sizing:border-box}
-    #rollPrintRoot .label .brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}
-    #rollPrintRoot .label .plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:3mm 0}
-    #rollPrintRoot .label .plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm;margin:1mm 0}
-    #rollPrintRoot .label .plant-size span,#rollPrintRoot .label .order-no span,#rollPrintRoot .label .customer span,#rollPrintRoot .label .phone span{font-size:8pt;font-weight:bold}
-    #rollPrintRoot .label .plant-size b{font-size:16pt;overflow-wrap:anywhere}
-    #rollPrintRoot .label .order-no,#rollPrintRoot .label .customer,#rollPrintRoot .label .phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:2mm 0}
-    #rollPrintRoot .label .order-no b{font-size:16pt;overflow-wrap:anywhere}
-    #rollPrintRoot .label .customer b,#rollPrintRoot .label .phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}
-    #rollPrintRoot .label .sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}
-  `;
-  openInPagePrint("Phiếu cây · "+(o.orderNo||"")+` · ${totalPlants} cây / ${totalPlants} nhãn`,pages,css);
+  if(!totalPlants){toast('Đơn hàng chưa có số lượng cây hợp lệ để in.');return;}
+  if(totalPlants>500){toast('Đơn có quá 500 cây. Vui lòng kiểm tra lại số lượng trước khi in.');return;}
+  const labels=[];plantRows.forEach(row=>{for(let i=0;i<row.qty;i++)labels.push({name:row.name,size:row.size});});
+  // Convert and release one canvas at a time to avoid exhausting phone/tablet memory.
+  const jpegs=[];
+  for(let index=0;index<labels.length;index++){
+    const canvas=pdfDrawPlantLabel({name:labels[index].name,size:labels[index].size,orderNo:o.orderNo,customer:o.buyerName,phone:o.buyerPhone},index,totalPlants);
+    jpegs.push(pdfCanvasJpegBytes(canvas));canvas.width=1;canvas.height=1;
+  }
+  openPrintPdf(jpegs,`ROLL-PHIEU-CAY-${o.orderNo||'DON'}.pdf`);
 }
 
 function resetCatalogForm(){
