@@ -45,30 +45,15 @@
 ### Cập nhật đơn giá
 Ô đơn giá nhập theo nghìn đồng: nhập `100` tương ứng `100.000 đ`. Giá được lưu trong Firestore theo đơn vị đồng (VND); khi chọn giá từ danh mục, giao diện hiển thị theo nghìn đồng.
 
+## Khôi phục cơ chế in ban đầu (03/11/2026)
 
-## Sửa chức năng in (03/11/2026)
+- Đã bỏ hoàn toàn màn hình xem trước dùng `iframe`.
+- Đã bỏ thuật toán tự co nội dung bằng `zoom` và các thay đổi căn trang phát sinh sau đó.
+- Khôi phục cách in của bản đầu: bấm nút sẽ mở cửa sổ in riêng bằng `window.open()`, nội dung phiếu được dựng trực tiếp trong cửa sổ đó và gọi hộp thoại in.
+- Mỗi phiếu dùng đúng `@page{size:75mm 100mm;margin:0}`, nội dung trang rộng 75 mm, cao 100 mm; bố cục phiếu kiện dùng lại kiểu flex dọc của bản đầu.
+- Phiếu kiện mới vẫn in số tiền đã phân bổ riêng cho từng kiện. Đơn cũ chưa có dữ liệu phân bổ tiếp tục in một phiếu tổng, không tự chia tiền.
+- Phiếu cây in một phiếu cho mỗi dòng cây/sản phẩm trong đơn, không nhân phiếu theo số lượng từng cây.
+- Hai luồng in phiếu kiện và phiếu cây đều dùng cùng cơ chế cửa sổ in ban đầu.
+- Trình duyệt cần cho phép pop-up từ website để cửa sổ in riêng được mở.
 
-- Không còn dùng `window.open()` cho phiếu kiện/phiếu cây, do phụ thuộc pop-up của trình duyệt.
-- Khi bấm nút in trong danh sách đơn, website mở bản xem trước ngay trên trang.
-- Từ bản xem trước, bấm **IN NGAY** để gọi hộp thoại in trực tiếp trên iframe cùng nguồn.
-- Giữ khổ giấy 75×100 mm, tự co nội dung để vừa khổ.
-- Phiếu kiện và phiếu cây vẫn là hai chức năng riêng.
-- Ô đơn giá nhập theo nghìn đồng: nhập `100` tương ứng `100.000đ`; dữ liệu lưu Firestore vẫn là VND.
-
-Đã kiểm tra `node --check` và chạy smoke test giả lập DOM: 2 phiếu kiện và 3 phiếu cây được sinh đúng, nút **IN NGAY** gọi `print()` trong cả hai trường hợp.
-
-## Hotfix 03/11/2026 — lỗi in phiếu do thiếu itemName()
-
-- Console đã xác nhận lỗi `ReferenceError: itemName is not defined` ở cả `printOrder()` và `printPlantLabels()`.
-- Đã bổ sung helper `itemName(item)` để đọc tên cây theo các trường dữ liệu `plantName`, `name`, `productName`, `title`, `tenCay`, `ten`, `product_name`, `product`.
-- Giữ nguyên hai luồng in phiếu kiện và phiếu cây, giao diện xem trước, khổ 75×100mm, dữ liệu đơn và quy tắc nhập giá theo nghìn đồng.
-- Đổi cache key app.js/style.css để trình duyệt tải mã mới.
-- Đã chạy `node --check` thành công.
-
-
-## Điều chỉnh khổ in 75×100 mm (03/11/2026)
-- Bỏ thuật toán `zoom` làm co cả chiều ngang khiến nội dung chỉ chiếm một phần nhỏ của giấy.
-- Phiếu kiện và phiếu cây luôn giữ chiều rộng vật lý 75 mm, chiều cao 100 mm.
-- Nội dung được căn theo toàn bộ chiều ngang; các phần được phân bố theo chiều dọc để tận dụng mặt phiếu.
-- Chỉ co theo chiều dọc khi nội dung thực sự vượt quá chiều cao khả dụng; không thu nhỏ chiều ngang.
-- CSS in đặt lại lề 0, kích thước từng phiếu đúng 75×100 mm.
+Đã kiểm tra cú pháp JavaScript bằng `node --check` và kiểm tra HTML đầu ra bằng test giả lập: không còn iframe/zoom; trang in khai báo kích thước 75×100 mm; số phiếu kiện được tạo theo số kiện có dữ liệu phân bổ; số phiếu cây bằng số dòng cây trong đơn. Chưa có trình duyệt Chrome thực tế trong môi trường build để xác nhận bản PDF in vật lý.
