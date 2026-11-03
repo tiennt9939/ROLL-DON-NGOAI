@@ -12,6 +12,14 @@ function toast(s){const el=$("toast");el.textContent=s;el.classList.add("show");
 function safe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function norm(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"d").trim().toLocaleLowerCase("vi").replace(/\s+/g," ");}
 function getName(d){return String(d.name||d.plantName||d.title||d.productName||d.tenCay||d.ten||"Cây chưa đặt tên").trim();}
+function itemName(item){
+  if(!item || typeof item !== "object") return "Cây chưa đặt tên";
+  return String(
+    item.plantName || item.name || item.productName || item.title ||
+    item.tenCay || item.ten || item.product_name || item.product ||
+    "Cây chưa đặt tên"
+  ).trim();
+}
 function getSizes(d){
   const raw=d.sizes||d.sizeOptions||d.quyCachList||d.kichThuocList||d.quyCach||d.kichThuoc||d.size;
   let values=[];
