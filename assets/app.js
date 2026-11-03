@@ -219,8 +219,9 @@ function productSummary(o){return (o.items||[]).map(x=>`${x.plantName||x.name||x
 function renderOrders(){
   const q=norm($("orderSearch").value),date=$("dateFilter").value;
   const list=orders.filter(o=>(!date||o.orderDate===date)&&(!q||norm([o.orderNo,o.buyerName,o.buyerPhone,productSummary(o)].join(" ")).includes(q)));
-  $("ordersBody").innerHTML=list.length?list.map(o=>`<tr><td><b>${safe(o.orderNo)}</b></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}${Array.isArray(o.parcelAmounts)?`<small class="saved-parcel-amounts">${o.parcelAmounts.map((v,i)=>`Kiện ${i+1}: ${money(v)}`).join(" · ")}</small>`:""}</td><td>${safe(o.packerName)}</td><td><button class="secondary" data-print="${safe(o.id)}">In phiếu kiện</button></td></tr>`).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
+  $("ordersBody").innerHTML=list.length?list.map(o=>`<tr><td><b>${safe(o.orderNo)}</b></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}${Array.isArray(o.parcelAmounts)?`<small class="saved-parcel-amounts">${o.parcelAmounts.map((v,i)=>`Kiện ${i+1}: ${money(v)}`).join(" · ")}</small>`:""}</td><td>${safe(o.packerName)}</td><td><div class="order-print-actions"><button class="secondary" data-print="${safe(o.id)}">In phiếu kiện</button><button class="secondary" data-plant-print="${safe(o.id)}">In phiếu cây</button></div></td></tr>`).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
   $("ordersBody").querySelectorAll("[data-print]").forEach(b=>b.onclick=()=>{const o=orders.find(x=>x.id===b.dataset.print);if(o)printOrder(o);});
+  $("ordersBody").querySelectorAll("[data-plant-print]").forEach(b=>b.onclick=()=>{const o=orders.find(x=>x.id===b.dataset.plantPrint);if(o)printPlantLabels(o);});
 }
 function itemName(x){return x.plantName||x.name||x.productName||x.title||x.tenCay||"Chưa có tên cây";}
 function printOrder(o){
@@ -258,6 +259,25 @@ function printOrder(o){
   window.onload=()=>{fitTickets();setTimeout(()=>{fitTickets();window.print();},250);};<\/script></body></html>`);
   w.document.close();
 }
+
+function printPlantLabels(o){
+  const labels=[];
+  (Array.isArray(o.items)?o.items:[]).forEach(x=>{
+    const qty=Math.max(0,Math.floor(Number(x.qty??x.quantity??x.soLuong??1)||0));
+    const name=itemName(x),size=x.size||x.quyCach||x.specification||x.kichThuoc||"";
+    for(let i=0;i<qty;i++)labels.push({name,size,unit:i+1,qty});
+  });
+  if(!labels.length){toast("Đơn hàng chưa có số lượng cây hợp lệ để in.");return;}
+  if(labels.length>500){toast("Đơn có quá 500 cây. Vui lòng kiểm tra lại số lượng trước khi in.");return;}
+  const pages=labels.map((x,index)=>`<article class="label"><div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div><div class="plant-name">${safe(x.name)}</div><div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div><div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div><div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div><div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"")}</b></div><div class="sequence">CÂY ${index+1} / ${labels.length}</div></article>`).join("");
+  const w=window.open("","_blank","width=520,height=720");
+  if(!w){toast("Trình duyệt chặn cửa sổ in. Cho phép pop-up rồi thử lại.");return;}
+  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu cây</title><style>
+  @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}.label{width:75mm;height:100mm;padding:5mm;overflow:hidden;page-break-after:always;break-after:page;display:flex;flex-direction:column;gap:3mm}.label:last-child{page-break-after:avoid;break-after:avoid}.brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}.plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.2;overflow-wrap:anywhere;margin:3mm 0}.plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm}.plant-size span,.order-no span,.customer span,.phone span{font-size:8pt;font-weight:bold}.plant-size b{font-size:16pt;overflow-wrap:anywhere}.order-no,.customer,.phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:2mm 0}.order-no b{font-size:16pt}.customer b,.phone b{font-size:12pt;overflow-wrap:anywhere}.sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}@media screen{body{background:#ddd}.label{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
+  </style></head><body>${pages}<script>window.onload=()=>setTimeout(()=>window.print(),250);<\/script></body></html>`);
+  w.document.close();
+}
+
 function resetCatalogForm(){
   editingCatalogId=null;$("catalogForm").reset();$("catalogFormTitle").textContent="Thêm cây mới";
   $("saveCatalogBtn").textContent="Lưu cây vào danh mục riêng";$("cancelCatalogEdit").classList.add("hidden");

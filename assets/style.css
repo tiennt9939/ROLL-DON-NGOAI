@@ -49,3 +49,5 @@ footer{text-align:center;color:#8a958e;font-size:11px;padding:25px}
 .parcel-allocation-summary b{color:var(--green);font-size:16px}
 .allocation-ok{color:#24734b;font-weight:700}.allocation-error{color:var(--red);font-weight:700}
 .saved-parcel-amounts{display:block;margin-top:4px;color:#52645a;font-size:11px;line-height:1.45}
+
+.order-print-actions{display:flex;flex-wrap:wrap;gap:6px}.order-print-actions button{white-space:nowrap}
