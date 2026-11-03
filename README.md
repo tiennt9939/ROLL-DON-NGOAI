@@ -45,16 +45,23 @@
 ### Cập nhật đơn giá
 Ô đơn giá nhập theo nghìn đồng: nhập `100` tương ứng `100.000 đ`. Giá được lưu trong Firestore theo đơn vị đồng (VND); khi chọn giá từ danh mục, giao diện hiển thị theo nghìn đồng.
 
-## Sửa in nhãn theo số cây và tương thích iPhone (03/11/2026)
+## Hệ thống in PDF đồng nhất đa nền tảng (03/11/2026)
 
-- Không mở cửa sổ/tab mới (`window.open`) và không dùng iframe. Cả phiếu kiện và phiếu cây được dựng trong trang hiện tại rồi gọi `window.print()` trực tiếp từ thao tác bấm của người dùng, tránh lỗi popup bị Safari trên iPhone chặn.
-- Sau khi bấm in, website hiển thị bản xem phiếu ngay trong trang; nếu hộp thoại in không tự hiện, người dùng có thể bấm nút **IN PHIẾU** ngay trên màn hình đó. Có nút **ĐÓNG** để quay lại danh sách đơn.
-- Phiếu cây tạo **một nhãn cho mỗi cây thực tế**, lặp theo số lượng `qty` / `quantity` / `soLuong` / `count` của từng dòng sản phẩm. Ví dụ 2 dòng có số lượng 2 và 3 sẽ sinh 5 nhãn, đánh số CÂY 1/5 đến CÂY 5/5.
-- Phiếu kiện vẫn giữ nguyên logic: đơn có `parcelAmounts` hợp lệ thì in một phiếu cho mỗi kiện và hiển thị tiền riêng của kiện đó; đơn cũ chưa có dữ liệu phân bổ tiếp tục in một phiếu tổng, không tự suy đoán cách chia tiền.
-- Giữ kích thước trang CSS `@page{size:75mm 100mm;margin:0}`. Trình điều khiển/máy in vẫn cần chọn đúng khổ giấy 75×100 mm khi hệ điều hành có yêu cầu.
+- Đã bỏ việc in HTML qua `window.print()` và CSS `@page`, vì Chrome/Safari và hộp thoại in trên các hệ điều hành có thể tự co giãn khổ giấy khác nhau.
+- Khi nhấn **In phiếu kiện** hoặc **In phiếu cây**, website tự dựng PDF trực tiếp trên thiết bị và mở PDF trong chính tab hiện tại. Không mở popup/tab mới, không dùng iframe; tương thích luồng mở PDF của Safari iPhone/iPad và Chrome Android/desktop.
+- Mỗi trang PDF có `MediaBox` và `CropBox` chính xác **75 × 100 mm**, ở độ phân giải dựng ảnh khoảng 305 DPI; PDF yêu cầu trình xem không tự co bằng `PrintScaling / None`.
+- Phiếu cây độc lập với phiếu kiện: tổng số trang bằng tổng số lượng cây của mọi dòng trong toàn bộ đơn, không chia theo kiện. Một cây là một trang PDF; ví dụ 6 cây chia 2 kiện vẫn là 6 trang phiếu cây.
+- Phiếu kiện độc lập: nếu đơn có phân bổ `parcelAmounts` hợp lệ thì một trang PDF cho mỗi kiện và hiển thị tiền riêng kiện đó; đơn cũ chưa có dữ liệu phân bổ vẫn in một phiếu tổng, không tự suy đoán chia tiền.
+- Hình ảnh nhãn được dựng ở 900 × 1200 px, sau đó đóng gói vào PDF theo đúng kích thước vật lý; nội dung phiếu cây gồm tên cây, quy cách/kích thước, mã đơn, khách hàng, số điện thoại và số thứ tự cây. Phiếu kiện gồm thông tin người mua, địa chỉ, cây, số kiện, tiền và nhân viên đóng hàng.
 - Không thay đổi Firestore schema, danh mục, đơn hàng, phân bổ tiền theo kiện hay dữ liệu app ROLL CÂY CẢNH.
 
-Đã kiểm tra cú pháp JavaScript bằng `node --check`; mã in không còn `window.open()`; hàm tạo nhãn lặp theo số lượng từng dòng và tạo trang riêng 75×100 mm. Đã kiểm tra bằng trình duyệt Chromium headless với đơn thử có tổng 5 cây để xác nhận số trang PDF. Chưa thể kiểm thử trực tiếp trên iPhone hoặc máy in vật lý trong môi trường này.
+### Khi in từ PDF
+Mở PDF trong tab hiện tại rồi chọn **In/Print** trên trình xem PDF. Với máy in nhãn, chọn khổ giấy 75 × 100 mm (hoặc khổ tương ứng máy hỗ trợ) và tỷ lệ **Actual size / 100%** nếu hộp thoại có lựa chọn. File PDF đã cố định kích thước; trình duyệt không còn tự tính khổ từ HTML. Nếu máy in/driver không hỗ trợ khổ 75 × 100 mm thì phần cứng vẫn cần được cấu hình khổ giấy tương ứng.
+
+### Kiểm tra kỹ thuật
+- `node --check` thành công với `assets/app.js`.
+- PDF mẫu tạo bằng cùng hàm đóng gói có 2 trang; `pdfinfo` xác nhận kích thước mỗi trang là `212.598 × 283.465 pt`, tương đương chính xác `75 × 100 mm`.
+- Đã kiểm tra PDF cấu trúc/xref và đọc được bằng công cụ PDF hệ thống. Chưa thể kiểm thử thao tác in thực tế trên từng thiết bị iPhone, Android, iPad hoặc từng model máy in.
 
 
 ## Quy tắc tách riêng phiếu kiện và phiếu cây (03/11/2026)
