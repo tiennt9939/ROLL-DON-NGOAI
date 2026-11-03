@@ -40,3 +40,7 @@
 - Danh sách đơn vẫn hiển thị tổng bill và đồng thời hiển thị số tiền của từng kiện để đối soát.
 - Nút **In phiếu kiện** in một phiếu 75×100mm cho mỗi kiện. Mỗi phiếu chỉ hiển thị tiền của kiện tương ứng, không in tổng bill hoặc tiền các kiện khác.
 - Đơn cũ chưa có `parcelAmounts` vẫn có thể in theo mẫu cũ; không tự suy đoán cách chia tiền cho đơn cũ.
+
+
+### Cập nhật đơn giá
+Ô đơn giá nhập theo nghìn đồng: nhập `100` tương ứng `100.000 đ`. Giá được lưu trong Firestore theo đơn vị đồng (VND); khi chọn giá từ danh mục, giao diện hiển thị theo nghìn đồng.
