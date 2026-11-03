@@ -291,23 +291,17 @@ function printOrder(o){
     </div></article>`).join("");
   const w=window.open("","_blank","width=520,height=720");
   if(!w){toast("Chrome đang chặn cửa sổ in. Bấm biểu tượng cửa sổ bị chặn ở cạnh thanh địa chỉ và chọn Luôn cho phép pop-up từ website này.");return;}
-  w.addEventListener("load",()=>{
-    setTimeout(()=>{
-      try{
-        w.focus();
-        if(typeof w.fitTickets==="function")w.fitTickets();
-        w.print();
-      }catch(err){toast("Cửa sổ in đã mở nhưng không gọi được lệnh in. Hãy thử Ctrl+P trong cửa sổ phiếu.");}
-    },500);
-  },{once:true});
   w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
+  @media screen{.print-toolbar{position:sticky;top:0;z-index:9999;background:#173f32;color:white;padding:10px;text-align:center;font:14px Arial,sans-serif}.print-toolbar button{background:white;color:#173f32;border:0;border-radius:6px;padding:9px 18px;font-weight:bold;cursor:pointer}.print-toolbar span{margin-left:10px}}
+  @media print{.print-toolbar{display:none!important}}
+  </style><style>
   @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}body{font-size:9pt}
   .ticket{width:75mm;height:100mm;max-height:100mm;padding:3mm;overflow:hidden;page-break-after:always;break-after:page}.ticket:last-child{page-break-after:avoid;break-after:avoid}.ticket-content{width:100%;transform-origin:top left}
   header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222;padding-bottom:1.5mm;font-size:1.05em}.order-code{text-align:center;font-size:1.35em;font-weight:bold;margin:1.5mm 0}.line{margin:1mm 0;line-height:1.2;overflow-wrap:anywhere}.parcel{text-align:center;font-size:1.35em;font-weight:bold;border:1px solid #111;padding:1.2mm;margin:1.5mm 0}.items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0}.items-heading{font-weight:bold;font-size:.82em;margin-bottom:.8mm}.item{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5mm;padding:.8mm 0;border-top:.2mm dotted #bbb;line-height:1.15;break-inside:avoid}.item-main{min-width:0;flex:1}.plant-name{font-weight:bold;overflow-wrap:anywhere}.item-meta{font-size:.82em;overflow-wrap:anywhere}.item-total{white-space:nowrap;font-size:.9em}.sum,.total{display:flex;justify-content:space-between;gap:2mm;margin:1mm 0}.total{font-size:1.2em;font-weight:bold;border-top:1px solid #111;padding-top:1.2mm}.parcel-money{border-top:1px solid #111;border-bottom:1px solid #111;padding:2mm 0;margin:2mm 0;display:flex;flex-direction:column;gap:1mm;text-align:center}.parcel-money span{font-size:.9em;font-weight:bold}.parcel-money b{font-size:1.55em}.note{font-size:.85em;margin-top:1mm;overflow-wrap:anywhere}footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:1.5mm;text-align:center;font-size:.78em}
   @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
-  </style></head><body>${tickets}<script>
+  </style></head><body><div class="print-toolbar"><button type="button" onclick="window.print()">IN PHIẾU</button><span>Nếu hộp thoại in không tự mở, hãy bấm nút này.</span></div>${tickets}<script>
   function fitTickets(){document.querySelectorAll('.ticket').forEach(ticket=>{const content=ticket.querySelector('.ticket-content');content.style.zoom='1';content.style.width='100%';const available=ticket.clientHeight;let scale=1;for(let i=0;i<30;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.42,scale));content.style.width=(100/Math.max(.42,scale))+'%';});}
-  window.fitTickets=fitTickets;<\/script></body></html>`);
+  window.fitTickets=fitTickets;window.onload=()=>{fitTickets();setTimeout(()=>{fitTickets();window.focus();window.print();},300)};<\/script></body></html>`);
   w.document.close();
 }
 
@@ -323,20 +317,14 @@ function printPlantLabels(o){
   const pages=labels.map((x,index)=>`<article class="label"><div class="label-content"><div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div><div class="plant-name">${safe(x.name)}</div><div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div><div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div><div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div><div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"Chưa có số điện thoại")}</b></div><div class="sequence">CÂY ${index+1} / ${labels.length}</div></div></article>`).join("");
   const w=window.open("","_blank","width=520,height=720");
   if(!w){toast("Chrome đang chặn cửa sổ in. Bấm biểu tượng cửa sổ bị chặn ở cạnh thanh địa chỉ và chọn Luôn cho phép pop-up từ website này.");return;}
-  w.addEventListener("load",()=>{
-    setTimeout(()=>{
-      try{
-        w.focus();
-        if(typeof w.fitLabels==="function")w.fitLabels();
-        w.print();
-      }catch(err){toast("Cửa sổ in đã mở nhưng không gọi được lệnh in. Hãy thử Ctrl+P trong cửa sổ phiếu.");}
-    },500);
-  },{once:true});
   w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu cây</title><style>
+  @media screen{.print-toolbar{position:sticky;top:0;z-index:9999;background:#173f32;color:white;padding:10px;text-align:center;font:14px Arial,sans-serif}.print-toolbar button{background:white;color:#173f32;border:0;border-radius:6px;padding:9px 18px;font-weight:bold;cursor:pointer}.print-toolbar span{margin-left:10px}}
+  @media print{.print-toolbar{display:none!important}}
+  </style><style>
   @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}.label{width:75mm;height:100mm;padding:5mm;overflow:hidden;page-break-after:always;break-after:page;display:block}.label:last-child{page-break-after:avoid;break-after:avoid}.label-content{width:100%;display:flex;flex-direction:column;gap:2.5mm}.brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}.plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:2mm 0}.plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm}.plant-size span,.order-no span,.customer span,.phone span{font-size:8pt;font-weight:bold}.plant-size b{font-size:16pt;overflow-wrap:anywhere}.order-no,.customer,.phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:1.5mm 0}.order-no b{font-size:16pt;overflow-wrap:anywhere}.customer b,.phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}.sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}@media screen{body{background:#ddd}.label{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
-  </style></head><body>${pages}<script>
+  </style></head><body><div class="print-toolbar"><button type="button" onclick="window.print()">IN PHIẾU</button><span>Nếu hộp thoại in không tự mở, hãy bấm nút này.</span></div>${pages}<script>
   function fitLabels(){document.querySelectorAll('.label').forEach(label=>{const content=label.querySelector('.label-content');content.style.zoom='1';content.style.width='100%';const available=label.clientHeight;let scale=1;for(let i=0;i<35;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.45,scale));content.style.width=(100/Math.max(.45,scale))+'%';});}
-  window.fitLabels=fitLabels;<\/script></body></html>`);
+  window.fitLabels=fitLabels;window.onload=()=>{fitLabels();setTimeout(()=>{fitLabels();window.focus();window.print();},300)};<\/script></body></html>`);
   w.document.close();
 }
 
