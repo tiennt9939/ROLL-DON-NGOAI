@@ -151,7 +151,7 @@ function updateSizeOptions(){
   s.innerHTML='<option value="">Không chọn quy cách</option>'+sizes.map(x=>`<option value="${safe(x)}">${safe(x)}</option>`).join("");
   if(sizes.includes(old))s.value=old;
   const row=selectedRow(g,s.value)||g.rows[0];
-  $("priceInput").value=row?getPrice(row,s.value):"";
+  $("priceInput").value=row?Math.round(getPrice(row,s.value)/1000):"";
 }
 function orderTotal(){
   return items.reduce((a,x)=>a+x.qty*x.price,0)+(Number($("shippingFee").value)||0);
@@ -194,7 +194,7 @@ function renderItems(){
 }
 function addItem(){
   const g=selectedGroup(),size=$("sizeSelect").value,row=selectedRow(g,size)||g?.rows[0];
-  const qty=Number($("qtyInput").value),price=Number($("priceInput").value);
+  const qty=Number($("qtyInput").value),price=Number($("priceInput").value)*1000;
   if(!g)return message("formMessage","Hãy chọn cây trong danh mục.");
   if(!Number.isInteger(qty)||qty<1)return message("formMessage","Số lượng phải là số nguyên lớn hơn 0.");
   if(!Number.isFinite(price)||price<0)return message("formMessage","Đơn giá không hợp lệ.");
@@ -375,7 +375,7 @@ $("password").addEventListener("keydown",e=>{if(e.key==="Enter")$("loginBtn").cl
 $("logoutBtn").onclick=()=>auth.signOut();
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>openTab(b.dataset.tab));
 $("plantSelect").onchange=()=>{const g=selectedGroup();if(g)$("plantSearch").value=g.name;updateSizeOptions();};
-$("sizeSelect").onchange=()=>{const g=selectedGroup(),r=selectedRow(g,$("sizeSelect").value);$("priceInput").value=r?getPrice(r,$("sizeSelect").value):0;};
+$("sizeSelect").onchange=()=>{const g=selectedGroup(),r=selectedRow(g,$("sizeSelect").value);$("priceInput").value=r?Math.round(getPrice(r,$("sizeSelect").value)/1000):0;};
 $("plantSearch").addEventListener("input",e=>{
   const current=selectedGroup();
   if(current&&norm(current.name)!==norm(e.target.value)){
