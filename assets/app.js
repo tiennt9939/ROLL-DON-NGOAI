@@ -266,6 +266,76 @@ async function deleteOrder(id){
   try{await db.collection(window.ROLL_COLLECTIONS.orders).doc(id).delete();toast("Đã xóa đơn "+(o.orderNo||""));}
   catch(e){toast("Không xóa được đơn: "+friendly(e));}
 }
+
+function openPrintPreview(html, title, fitFunctionName) {
+  const previous = document.getElementById("rollPrintPreview");
+  if (previous) previous.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "rollPrintPreview";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:2147483000;background:rgba(12,24,19,.72);display:flex;align-items:center;justify-content:center;padding:14px;";
+
+  overlay.innerHTML = `
+    <section style="width:min(560px,100%);height:min(92vh,900px);background:#fff;border-radius:14px;box-shadow:0 12px 40px #0005;display:flex;flex-direction:column;overflow:hidden;">
+      <header style="flex:none;padding:12px 16px;background:#173f32;color:#fff;display:flex;align-items:center;gap:10px;">
+        <strong style="font:700 15px Arial,sans-serif;flex:1">${safe(title)}</strong>
+        <button type="button" data-roll-close style="border:0;border-radius:8px;background:#fff;color:#173f32;padding:9px 12px;font-weight:700;cursor:pointer">Đóng</button>
+      </header>
+      <div style="flex:none;padding:9px 14px;background:#f1f5f2;color:#263b32;font:13px Arial,sans-serif">
+        Kiểm tra bản xem trước, sau đó bấm <b>IN NGAY</b>. Không cần cho phép pop-up.
+      </div>
+      <div style="flex:1;min-height:0;background:#d9dedb;padding:8px;overflow:auto;display:flex;justify-content:center">
+        <iframe title="${safe(title)}" data-roll-preview-frame style="width:100%;height:100%;min-height:420px;border:0;background:#fff;border-radius:4px"></iframe>
+      </div>
+      <footer style="flex:none;padding:12px 14px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid #e4e9e6">
+        <button type="button" data-roll-close style="border:1px solid #d4ddd8;border-radius:8px;background:#f3f6f4;color:#263b32;padding:11px 16px;font-weight:700;cursor:pointer">Hủy</button>
+        <button type="button" data-roll-print style="border:0;border-radius:8px;background:#173f32;color:#fff;padding:11px 22px;font-weight:700;cursor:pointer">IN NGAY</button>
+      </footer>
+    </section>`;
+
+  const oldOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  document.body.appendChild(overlay);
+
+  const frame = overlay.querySelector("[data-roll-preview-frame]");
+  const close = () => {
+    document.body.style.overflow = oldOverflow;
+    overlay.remove();
+  };
+  overlay.querySelectorAll("[data-roll-close]").forEach(button => {
+    button.addEventListener("click", close);
+  });
+
+  frame.addEventListener("load", () => {
+    try {
+      const frameWindow = frame.contentWindow;
+      if (frameWindow && typeof frameWindow[fitFunctionName] === "function") {
+        frameWindow[fitFunctionName]();
+      }
+    } catch (error) {
+      console.warn("Print preview layout adjustment failed:", error);
+    }
+  }, { once: true });
+
+  overlay.querySelector("[data-roll-print]").addEventListener("click", () => {
+    try {
+      const frameWindow = frame.contentWindow;
+      if (!frameWindow) throw new Error("Không khởi tạo được bản xem trước.");
+      frameWindow.focus();
+      if (typeof frameWindow[fitFunctionName] === "function") {
+        frameWindow[fitFunctionName]();
+      }
+      frameWindow.print();
+    } catch (error) {
+      console.error("Print failed:", error);
+      toast("Không gọi được hộp thoại in. Hãy kiểm tra trình duyệt có cho phép in hay không.");
+    }
+  });
+
+  frame.srcdoc = html;
+  toast("Đã mở bản xem trước. Bấm IN NGAY để in.");
+}
+
 function printOrder(o){
   const count=Math.max(1,Number(o.parcelCount)||1);
   const allocations=Array.isArray(o.parcelAmounts)&&o.parcelAmounts.length===count?o.parcelAmounts.map(x=>Number(x)||0):null;
@@ -289,9 +359,7 @@ function printOrder(o){
       <div class="line"><b>NV đóng hàng:</b> ${safe(o.packerName)}</div>${o.note?`<div class="note"><b>Ghi chú:</b> ${safe(o.note)}</div>`:""}
       <footer>Ngày ${safe(o.orderDate)} · ${safe(o.orderNo)}</footer>
     </div></article>`).join("");
-  const w=window.open("","_blank","width=520,height=720");
-  if(!w){toast("Chrome đang chặn cửa sổ in. Bấm biểu tượng cửa sổ bị chặn ở cạnh thanh địa chỉ và chọn Luôn cho phép pop-up từ website này.");return;}
-  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
+  const printHtml = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
   @media screen{.print-toolbar{position:sticky;top:0;z-index:9999;background:#173f32;color:white;padding:10px;text-align:center;font:14px Arial,sans-serif}.print-toolbar button{background:white;color:#173f32;border:0;border-radius:6px;padding:9px 18px;font-weight:bold;cursor:pointer}.print-toolbar span{margin-left:10px}}
   @media print{.print-toolbar{display:none!important}}
   </style><style>
@@ -301,8 +369,8 @@ function printOrder(o){
   @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
   </style></head><body><div class="print-toolbar"><button type="button" onclick="window.print()">IN PHIẾU</button><span>Nếu hộp thoại in không tự mở, hãy bấm nút này.</span></div>${tickets}<script>
   function fitTickets(){document.querySelectorAll('.ticket').forEach(ticket=>{const content=ticket.querySelector('.ticket-content');content.style.zoom='1';content.style.width='100%';const available=ticket.clientHeight;let scale=1;for(let i=0;i<30;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.42,scale));content.style.width=(100/Math.max(.42,scale))+'%';});}
-  window.fitTickets=fitTickets;window.onload=()=>{fitTickets();setTimeout(()=>{fitTickets();window.focus();window.print();},300)};<\/script></body></html>`);
-  w.document.close();
+  window.fitTickets=fitTickets;<\/script></body></html>`;
+  openPrintPreview(printHtml, "Phiếu kiện · " + (o.orderNo || ""), "fitTickets");
 }
 
 function printPlantLabels(o){
@@ -315,17 +383,15 @@ function printPlantLabels(o){
   if(!labels.length){toast("Đơn hàng chưa có số lượng cây hợp lệ để in.");return;}
   if(labels.length>500){toast("Đơn có quá 500 cây. Vui lòng kiểm tra lại số lượng trước khi in.");return;}
   const pages=labels.map((x,index)=>`<article class="label"><div class="label-content"><div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div><div class="plant-name">${safe(x.name)}</div><div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div><div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div><div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div><div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"Chưa có số điện thoại")}</b></div><div class="sequence">CÂY ${index+1} / ${labels.length}</div></div></article>`).join("");
-  const w=window.open("","_blank","width=520,height=720");
-  if(!w){toast("Chrome đang chặn cửa sổ in. Bấm biểu tượng cửa sổ bị chặn ở cạnh thanh địa chỉ và chọn Luôn cho phép pop-up từ website này.");return;}
-  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu cây</title><style>
+  const printHtml = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu cây</title><style>
   @media screen{.print-toolbar{position:sticky;top:0;z-index:9999;background:#173f32;color:white;padding:10px;text-align:center;font:14px Arial,sans-serif}.print-toolbar button{background:white;color:#173f32;border:0;border-radius:6px;padding:9px 18px;font-weight:bold;cursor:pointer}.print-toolbar span{margin-left:10px}}
   @media print{.print-toolbar{display:none!important}}
   </style><style>
   @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}.label{width:75mm;height:100mm;padding:5mm;overflow:hidden;page-break-after:always;break-after:page;display:block}.label:last-child{page-break-after:avoid;break-after:avoid}.label-content{width:100%;display:flex;flex-direction:column;gap:2.5mm}.brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}.plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:2mm 0}.plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm}.plant-size span,.order-no span,.customer span,.phone span{font-size:8pt;font-weight:bold}.plant-size b{font-size:16pt;overflow-wrap:anywhere}.order-no,.customer,.phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:1.5mm 0}.order-no b{font-size:16pt;overflow-wrap:anywhere}.customer b,.phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}.sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}@media screen{body{background:#ddd}.label{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
   </style></head><body><div class="print-toolbar"><button type="button" onclick="window.print()">IN PHIẾU</button><span>Nếu hộp thoại in không tự mở, hãy bấm nút này.</span></div>${pages}<script>
   function fitLabels(){document.querySelectorAll('.label').forEach(label=>{const content=label.querySelector('.label-content');content.style.zoom='1';content.style.width='100%';const available=label.clientHeight;let scale=1;for(let i=0;i<35;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.45,scale));content.style.width=(100/Math.max(.45,scale))+'%';});}
-  window.fitLabels=fitLabels;window.onload=()=>{fitLabels();setTimeout(()=>{fitLabels();window.focus();window.print();},300)};<\/script></body></html>`);
-  w.document.close();
+  window.fitLabels=fitLabels;<\/script></body></html>`;
+  openPrintPreview(printHtml, "Phiếu cây · " + (o.orderNo || ""), "fitLabels");
 }
 
 function resetCatalogForm(){
