@@ -275,6 +275,59 @@ async function deleteOrder(id){
   catch(e){toast("Không xóa được đơn: "+friendly(e));}
 }
 
+function openInPagePrint(title, pagesHtml, pageStyles=""){
+  // In trang ngay trong tài liệu hiện tại: không mở popup/tab mới, tương thích Safari iPhone.
+  const oldRoot=document.getElementById("rollPrintRoot");
+  const oldStyle=document.getElementById("rollPrintStyle");
+  if(oldRoot)oldRoot.remove();
+  if(oldStyle)oldStyle.remove();
+
+  const style=document.createElement("style");
+  style.id="rollPrintStyle";
+  style.textContent=`
+    @page{size:75mm 100mm;margin:0}
+    @media screen{
+      body.roll-printing> :not(#rollPrintRoot){display:none!important}
+      #rollPrintRoot{position:fixed;inset:0;z-index:2147483000;overflow:auto;background:#e9eeeb;padding:10px 8px 24px;-webkit-overflow-scrolling:touch}
+      #rollPrintRoot .print-toolbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;background:#173f32;color:#fff;padding:10px;border-radius:10px;margin:0 auto 12px;max-width:600px;font:14px Arial,sans-serif}
+      #rollPrintRoot .print-toolbar button{background:#fff;color:#173f32;border:0;border-radius:7px;padding:10px 15px;font-weight:700;min-height:40px}
+      #rollPrintRoot .print-toolbar .close-print{background:#e8eee9;color:#25382e}
+      #rollPrintRoot .print-document{width:75mm;margin:0 auto}
+      #rollPrintRoot .print-page{background:#fff;box-shadow:0 2px 12px #0002;margin:0 auto 10px}
+    }
+    @media print{
+      html,body{width:75mm!important;min-width:75mm!important;margin:0!important;padding:0!important;background:#fff!important}
+      body.roll-printing> :not(#rollPrintRoot){display:none!important}
+      #rollPrintRoot{display:block!important;position:static!important;inset:auto!important;z-index:auto!important;width:75mm!important;height:auto!important;max-height:none!important;overflow:visible!important;margin:0!important;padding:0!important;background:#fff!important}
+      #rollPrintRoot .print-toolbar{display:none!important}
+      #rollPrintRoot .print-document{display:block!important;width:75mm!important;margin:0!important;padding:0!important}
+      #rollPrintRoot .print-page{display:block!important;width:75mm!important;height:100mm!important;min-height:100mm!important;max-height:100mm!important;margin:0!important;box-shadow:none!important;overflow:hidden!important;break-after:page;page-break-after:always}
+      #rollPrintRoot .print-page:last-child{break-after:auto!important;page-break-after:auto!important}
+    }
+    ${pageStyles}
+  `;
+  document.head.appendChild(style);
+
+  const root=document.createElement("section");
+  root.id="rollPrintRoot";
+  root.setAttribute("aria-label",title);
+  root.innerHTML=`<div class="print-toolbar"><b>${safe(title)}</b><button type="button" data-print-now>IN PHIẾU</button><button type="button" class="close-print" data-close-print>ĐÓNG</button><span>Đã tạo ${pagesHtml ? "đầy đủ nhãn" : "phiếu"}. Bấm IN PHIẾU nếu hộp in chưa tự hiện.</span></div><div class="print-document">${pagesHtml}</div>`;
+  document.body.appendChild(root);
+  document.body.classList.add("roll-printing");
+
+  root.querySelector("[data-print-now]").addEventListener("click",()=>{
+    // Gọi đồng bộ từ thao tác chạm của người dùng; Safari iOS không cần popup.
+    try{window.print();}catch(err){toast("Không gọi được chức năng in. Hãy thử nút IN PHIẾU lần nữa.");}
+  });
+  root.querySelector("[data-close-print]").addEventListener("click",()=>{
+    document.body.classList.remove("roll-printing");
+    root.remove();style.remove();
+  });
+
+  // Không dùng window.open(), iframe, popup hoặc setTimeout vì iPhone/Safari chặn popup.
+  try{window.print();}catch(err){toast("Không gọi được chức năng in. Hãy bấm IN PHIẾU ở thanh phía trên.");}
+}
+
 function printOrder(o){
   const count=Math.max(1,Math.min(99,Number(o.parcelCount)||1));
   const allocations=Array.isArray(o.parcelAmounts)&&o.parcelAmounts.length===count
@@ -286,13 +339,11 @@ function printOrder(o){
     const size=x.size||x.quyCach||x.specification||"";
     return `<div class="item"><span><b>${safe(itemName(x))}</b>${size?` · ${safe(size)}`:""} × ${qty}</span><b>${money(lineTotal)}</b></div>`;
   }).join("");
-  // Giữ hành vi bản đầu: mở một cửa sổ in riêng; mỗi phiếu là một trang 75×100 mm.
-  // Đơn mới có phân bổ tiền: mỗi kiện in đúng số tiền riêng. Đơn cũ chưa có phân bổ
-  // vẫn in một phiếu tổng, không tự chia tiền khi không có dữ liệu.
+  // Mỗi phiếu kiện là một trang riêng; dữ liệu phân bổ tiền theo kiện được giữ nguyên.
   const tickets=(allocations?Array.from({length:count},(_,i)=>i):[null]).map(index=>{
     const hasAllocation=index!==null;
     const amount=hasAllocation?allocations[index]:null;
-    return `<article class="ticket">
+    return `<article class="ticket print-page">
       <header><strong>ROLL CÂY CẢNH</strong><span>ĐƠN NGOÀI</span></header>
       <div class="order-code">${safe(o.orderNo)}</div>
       <div class="line"><b>Người mua:</b> ${safe(o.buyerName)}</div>
@@ -306,74 +357,77 @@ function printOrder(o){
       <footer>Ngày ${safe(o.orderDate)} · ${safe(o.orderNo)}</footer>
     </article>`;
   }).join("");
-  const w=window.open("","_blank","width=520,height=720");
-  if(!w){toast("Chrome đang chặn cửa sổ in. Hãy cho phép pop-up từ website này rồi bấm in lại.");return;}
-  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
-  @page{size:75mm 100mm;margin:0}
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{font:9pt Arial,sans-serif;color:#111}
-  .ticket{width:75mm;height:100mm;padding:4mm;page-break-after:always;break-after:page;overflow:hidden;display:flex;flex-direction:column}
-  .ticket:last-child{page-break-after:auto;break-after:auto}
-  header{display:flex;justify-content:space-between;border-bottom:1px solid #222;padding-bottom:2mm;font-size:10pt}
-  .order-code{text-align:center;font-size:13pt;font-weight:bold;margin:2mm 0}
-  .line{margin:1mm 0;line-height:1.25;overflow-wrap:anywhere}
-  .address{max-height:12mm;overflow:hidden}
-  .parcel{text-align:center;font-size:15pt;font-weight:bold;border:1.5px solid #111;padding:1.5mm;margin:2mm 0}
-  .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0;flex:1;overflow:hidden}
-  .items-heading{font-weight:bold;font-size:8pt;margin-bottom:1mm}
-  .item{display:flex;justify-content:space-between;gap:2mm;font-size:8pt;padding:.7mm 0;line-height:1.15;break-inside:avoid}
-  .item span{max-width:48mm;overflow-wrap:anywhere}
-  .sum,.total{display:flex;justify-content:space-between;margin:1mm 0;gap:2mm}
-  .total{font-size:12pt;font-weight:bold;border-top:1px solid #111;padding-top:1.5mm}
-  .parcel-money{border-top:1px solid #111;border-bottom:1px solid #111;padding:2mm 0;margin:2mm 0;display:flex;flex-direction:column;gap:1mm;text-align:center}
-  .parcel-money span{font-size:8pt;font-weight:bold}.parcel-money b{font-size:15pt}
-  .note{font-size:8pt;margin-top:1mm;overflow-wrap:anywhere}
-  footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:2mm;text-align:center;font-size:7pt}
-  @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
-  @media print{.ticket{margin:0;box-shadow:none}}
-  </style></head><body>${tickets}<script>window.onload=()=>setTimeout(()=>{window.focus();window.print();},350);<\/script></body></html>`);
-  w.document.close();
+  const css=`
+    #rollPrintRoot .ticket{padding:4mm;display:flex;flex-direction:column;font:9pt Arial,sans-serif;color:#111;box-sizing:border-box}
+    #rollPrintRoot .ticket *{box-sizing:border-box}
+    #rollPrintRoot .ticket header{display:flex;justify-content:space-between;border-bottom:1px solid #222;padding-bottom:2mm;font-size:10pt}
+    #rollPrintRoot .ticket .order-code{text-align:center;font-size:13pt;font-weight:bold;margin:2mm 0}
+    #rollPrintRoot .ticket .line{margin:1mm 0;line-height:1.25;overflow-wrap:anywhere}
+    #rollPrintRoot .ticket .address{max-height:12mm;overflow:hidden}
+    #rollPrintRoot .ticket .parcel{text-align:center;font-size:15pt;font-weight:bold;border:1.5px solid #111;padding:1.5mm;margin:2mm 0}
+    #rollPrintRoot .ticket .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0;flex:1;overflow:hidden}
+    #rollPrintRoot .ticket .items-heading{font-weight:bold;font-size:8pt;margin-bottom:1mm}
+    #rollPrintRoot .ticket .item{display:flex;justify-content:space-between;gap:2mm;font-size:8pt;padding:.7mm 0;line-height:1.15;break-inside:avoid}
+    #rollPrintRoot .ticket .item span{max-width:48mm;overflow-wrap:anywhere}
+    #rollPrintRoot .ticket .sum,#rollPrintRoot .ticket .total{display:flex;justify-content:space-between;margin:1mm 0;gap:2mm}
+    #rollPrintRoot .ticket .total{font-size:12pt;font-weight:bold;border-top:1px solid #111;padding-top:1.5mm}
+    #rollPrintRoot .ticket .parcel-money{border-top:1px solid #111;border-bottom:1px solid #111;padding:2mm 0;margin:2mm 0;display:flex;flex-direction:column;gap:1mm;text-align:center}
+    #rollPrintRoot .ticket .parcel-money span{font-size:8pt;font-weight:bold}
+    #rollPrintRoot .ticket .parcel-money b{font-size:15pt}
+    #rollPrintRoot .ticket .note{font-size:8pt;margin-top:1mm;overflow-wrap:anywhere}
+    #rollPrintRoot .ticket footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:2mm;text-align:center;font-size:7pt}
+  `;
+  openInPagePrint("Phiếu kiện · "+(o.orderNo||""),tickets,css);
 }
 
 function printPlantLabels(o){
-  const labels=(Array.isArray(o.items)?o.items:[]).map(x=>({
+  // PHIẾU CÂY LÀ PHIẾU RIÊNG CỦA TOÀN ĐƠN:
+  // - Không đọc parcelCount / parcelAmounts.
+  // - Tổng số nhãn = tổng số lượng cây của tất cả dòng sản phẩm trong đơn.
+  // - Mỗi cây thực tế tạo đúng một nhãn, bất kể đơn được chia thành bao nhiêu kiện.
+  const sourceItems=Array.isArray(o.items)?o.items:[];
+  const getPlantQty=x=>{
+    const candidates=[x.qty,x.quantity,x.soLuong,x.count];
+    const raw=candidates.find(v=>v!==undefined&&v!==null&&String(v).trim()!=='');
+    const value=raw===undefined?1:Number(String(raw).trim().replace(',','.'));
+    return Number.isFinite(value)&&value>0?Math.floor(value):0;
+  };
+  const plantRows=sourceItems.map(x=>({
     name:itemName(x),
-    size:x.size||x.quyCach||x.specification||x.kichThuoc||""
-  }));
-  if(!labels.length){toast("Đơn hàng chưa có thông tin cây để in.");return;}
-  if(labels.length>100){toast("Đơn có quá 100 loại cây. Vui lòng kiểm tra lại trước khi in.");return;}
-  const pages=labels.map((x,index)=>`<article class="label">
+    size:x.size||x.quyCach||x.specification||x.kichThuoc||'',
+    qty:getPlantQty(x)
+  })).filter(x=>x.qty>0);
+  const totalPlants=plantRows.reduce((sum,x)=>sum+x.qty,0);
+  if(!totalPlants){toast("Đơn hàng chưa có số lượng cây hợp lệ để in.");return;}
+  if(totalPlants>500){toast("Đơn có quá 500 cây. Vui lòng kiểm tra lại số lượng trước khi in.");return;}
+
+  const labels=[];
+  plantRows.forEach(row=>{
+    for(let i=0;i<row.qty;i++)labels.push({name:row.name,size:row.size});
+  });
+  const pages=labels.map((x,index)=>`<article class="label print-page">
     <div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div>
     <div class="plant-name">${safe(x.name)}</div>
     <div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div>
     <div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div>
     <div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div>
     <div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"Chưa có số điện thoại")}</b></div>
-    <div class="sequence">CÂY ${index+1} / ${labels.length}</div>
+    <div class="sequence">CÂY ${index+1} / ${totalPlants}</div>
   </article>`).join("");
-  const w=window.open("","_blank","width=520,height=720");
-  if(!w){toast("Chrome đang chặn cửa sổ in. Hãy cho phép pop-up từ website này rồi bấm in lại.");return;}
-  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safe(o.orderNo)} - Phiếu cây</title><style>
-  @page{size:75mm 100mm;margin:0}
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{font-family:Arial,sans-serif;color:#111}
-  .label{width:75mm;height:100mm;padding:5mm;overflow:hidden;page-break-after:always;break-after:page;display:flex;flex-direction:column}
-  .label:last-child{page-break-after:auto;break-after:auto}
-  .brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}
-  .plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:3mm 0}
-  .plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm;margin:1mm 0}
-  .plant-size span,.order-no span,.customer span,.phone span{font-size:8pt;font-weight:bold}
-  .plant-size b{font-size:16pt;overflow-wrap:anywhere}
-  .order-no,.customer,.phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:2mm 0}
-  .order-no b{font-size:16pt;overflow-wrap:anywhere}
-  .customer b,.phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}
-  .sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}
-  @media screen{body{background:#ddd}.label{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
-  @media print{.label{margin:0;box-shadow:none}}
-  </style></head><body>${pages}<script>window.onload=()=>setTimeout(()=>{window.focus();window.print();},350);<\/script></body></html>`);
-  w.document.close();
+  const css=`
+    #rollPrintRoot .label{padding:5mm;display:flex;flex-direction:column;color:#111;font-family:Arial,sans-serif}
+    #rollPrintRoot .label *{box-sizing:border-box}
+    #rollPrintRoot .label .brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}
+    #rollPrintRoot .label .plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:3mm 0}
+    #rollPrintRoot .label .plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm;margin:1mm 0}
+    #rollPrintRoot .label .plant-size span,#rollPrintRoot .label .order-no span,#rollPrintRoot .label .customer span,#rollPrintRoot .label .phone span{font-size:8pt;font-weight:bold}
+    #rollPrintRoot .label .plant-size b{font-size:16pt;overflow-wrap:anywhere}
+    #rollPrintRoot .label .order-no,#rollPrintRoot .label .customer,#rollPrintRoot .label .phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:2mm 0}
+    #rollPrintRoot .label .order-no b{font-size:16pt;overflow-wrap:anywhere}
+    #rollPrintRoot .label .customer b,#rollPrintRoot .label .phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}
+    #rollPrintRoot .label .sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}
+  `;
+  openInPagePrint("Phiếu cây · "+(o.orderNo||"")+` · ${totalPlants} cây / ${totalPlants} nhãn`,pages,css);
 }
 
 function resetCatalogForm(){
