@@ -38,3 +38,14 @@ footer{text-align:center;color:#8a958e;font-size:11px;padding:25px}
 .plant-suggestion small{color:#78877d;font-size:11px;font-weight:400;white-space:nowrap}
 .plant-no-results{padding:13px;color:#78877d;font-size:13px}
 @media(max-width:700px){.plant-picker{grid-column:span 2;min-width:0}}
+
+/* Per-parcel bill allocation */
+.parcel-amounts-panel{margin:16px 0 4px;padding:14px;border:1px solid #dce8df;border-radius:12px;background:#f8fbf9}
+.parcel-amounts-heading{display:flex;flex-direction:column;gap:3px;margin-bottom:12px;color:var(--green)}
+.parcel-amounts-heading small{font-size:12px;font-weight:400;color:var(--muted)}
+.parcel-amounts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.parcel-amounts-grid input{font-variant-numeric:tabular-nums}
+.parcel-allocation-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}
+.parcel-allocation-summary b{color:var(--green);font-size:16px}
+.allocation-ok{color:#24734b;font-weight:700}.allocation-error{color:var(--red);font-weight:700}
+.saved-parcel-amounts{display:block;margin-top:4px;color:#52645a;font-size:11px;line-height:1.45}

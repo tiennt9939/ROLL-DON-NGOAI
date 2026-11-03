@@ -153,9 +153,30 @@ function updateSizeOptions(){
   const row=selectedRow(g,s.value)||g.rows[0];
   $("priceInput").value=row?getPrice(row,s.value):"";
 }
+function orderTotal(){
+  return items.reduce((a,x)=>a+x.qty*x.price,0)+(Number($("shippingFee").value)||0);
+}
+function renderParcelAmountInputs(preserve=true){
+  const count=Number($("parcelCount").value);
+  const old=preserve?[...document.querySelectorAll("[data-parcel-amount]")].map(x=>Number(x.value)||0):[];
+  const safeCount=Number.isInteger(count)&&count>=1&&count<=99?count:1;
+  $("parcelAmountsInputs").innerHTML=Array.from({length:safeCount},(_,i)=>`<label>Kiện ${i+1} (₫)<input type="number" min="0" step="1" inputmode="numeric" data-parcel-amount="${i}" value="${old[i]??0}" placeholder="Nhập tiền kiện ${i+1}"></label>`).join("");
+  $("parcelAmountsInputs").querySelectorAll("[data-parcel-amount]").forEach(input=>input.addEventListener("input",updateParcelAllocation));
+  updateParcelAllocation();
+}
+function parcelAmounts(){return [...document.querySelectorAll("[data-parcel-amount]")].map(x=>Number(x.value)||0);}
+function updateParcelAllocation(){
+  if(!$("parcelAmountsInputs"))return;
+  const values=parcelAmounts(),allocated=values.reduce((a,b)=>a+b,0),total=orderTotal(),delta=total-allocated;
+  $("parcelAllocatedTotal").textContent=money(allocated);
+  const status=$("parcelAllocationStatus");
+  status.textContent=delta===0?"Đã khớp tổng bill":delta>0?`Còn thiếu: ${money(delta)}`:`Đang vượt: ${money(-delta)}`;
+  status.className=delta===0?"allocation-ok":"allocation-error";
+}
 function totals(){
   const subtotal=items.reduce((a,x)=>a+x.qty*x.price,0),ship=Number($("shippingFee").value)||0;
   $("subtotal").textContent=money(subtotal);$("shippingTotal").textContent=money(ship);$("grandTotal").textContent=money(subtotal+ship);
+  updateParcelAllocation();
 }
 function renderItems(){
   const body=$("itemsBody");
@@ -174,7 +195,7 @@ function addItem(){
 }
 function resetForm(){
   $("orderForm").reset();$("orderDate").value=today();$("parcelCount").value=1;$("shippingFee").value=0;
-  items=[];renderItems();renderPlantOptions($("plantSearch").value||"");message("formMessage","");
+  items=[];renderItems();renderParcelAmountInputs(false);renderPlantOptions($("plantSearch").value||"");message("formMessage","");
 }
 async function saveOrder(e){
   e.preventDefault();
@@ -183,9 +204,12 @@ async function saveOrder(e){
   const parcelCount=Number($("parcelCount").value),shippingFee=Number($("shippingFee").value)||0;
   if(!buyerName||!buyerPhone||!buyerAddress||!packerName)return message("formMessage","Vui lòng nhập đủ thông tin người mua và nhân viên đóng hàng.");
   if(!Number.isInteger(parcelCount)||parcelCount<1||parcelCount>99)return message("formMessage","Số kiện phải từ 1 đến 99.");
-  const subtotal=items.reduce((a,x)=>a+x.qty*x.price,0),now=Date.now();
+  const subtotal=items.reduce((a,x)=>a+x.qty*x.price,0),total=subtotal+shippingFee,allocations=parcelAmounts();
+  if(allocations.length!==parcelCount||allocations.some(x=>!Number.isSafeInteger(x)||x<0))return message("formMessage","Vui lòng nhập số tiền hợp lệ cho từng kiện.");
+  if(allocations.reduce((a,b)=>a+b,0)!==total)return message("formMessage",`Tổng tiền các kiện phải khớp tổng bill ${money(total)}. Hiện đã phân bổ ${money(allocations.reduce((a,b)=>a+b,0))}.`);
+  const now=Date.now();
   const orderNo=$("orderNo").value.trim()||("DN"+today().replaceAll("-","")+"-"+String(now).slice(-6));
-  const payload={orderNo,buyerName,buyerPhone,buyerAddress,orderDate:$("orderDate").value,items:items.map(x=>({...x})),subtotal,shippingFee,total:subtotal+shippingFee,parcelCount,packerName,note:$("note").value.trim(),status:"created",createdAtMs:now,createdByUid:user.uid,createdByEmail:user.email||"",updatedAtMs:now,source:"ROLL_DON_NGOAI",catalogPath:"apps/roll-cay-canh.data.catalog + externalCatalog"};
+  const payload={orderNo,buyerName,buyerPhone,buyerAddress,orderDate:$("orderDate").value,items:items.map(x=>({...x})),subtotal,shippingFee,total,parcelCount,parcelAmounts:allocations,packerName,note:$("note").value.trim(),status:"created",createdAtMs:now,createdByUid:user.uid,createdByEmail:user.email||"",updatedAtMs:now,source:"ROLL_DON_NGOAI",catalogPath:"apps/roll-cay-canh.data.catalog + externalCatalog"};
   $("saveBtn").disabled=true;$("saveBtn").textContent="Đang lưu…";
   try{await db.collection(window.ROLL_COLLECTIONS.orders).add(payload);toast("Đã lưu đơn "+orderNo);resetForm();openTab("orders");}
   catch(err){message("formMessage","Không lưu được đơn: "+friendly(err));}
@@ -195,93 +219,43 @@ function productSummary(o){return (o.items||[]).map(x=>`${x.plantName||x.name||x
 function renderOrders(){
   const q=norm($("orderSearch").value),date=$("dateFilter").value;
   const list=orders.filter(o=>(!date||o.orderDate===date)&&(!q||norm([o.orderNo,o.buyerName,o.buyerPhone,productSummary(o)].join(" ")).includes(q)));
-  $("ordersBody").innerHTML=list.length?list.map(o=>`<tr><td><b>${safe(o.orderNo)}</b></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}</td><td>${safe(o.packerName)}</td><td><button class="secondary" data-print="${safe(o.id)}">In phiếu</button></td></tr>`).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
+  $("ordersBody").innerHTML=list.length?list.map(o=>`<tr><td><b>${safe(o.orderNo)}</b></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}${Array.isArray(o.parcelAmounts)?`<small class="saved-parcel-amounts">${o.parcelAmounts.map((v,i)=>`Kiện ${i+1}: ${money(v)}`).join(" · ")}</small>`:""}</td><td>${safe(o.packerName)}</td><td><button class="secondary" data-print="${safe(o.id)}">In phiếu kiện</button></td></tr>`).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
   $("ordersBody").querySelectorAll("[data-print]").forEach(b=>b.onclick=()=>{const o=orders.find(x=>x.id===b.dataset.print);if(o)printOrder(o);});
 }
 function itemName(x){return x.plantName||x.name||x.productName||x.title||x.tenCay||"Chưa có tên cây";}
 function printOrder(o){
+  const count=Math.max(1,Number(o.parcelCount)||1);
+  const allocations=Array.isArray(o.parcelAmounts)&&o.parcelAmounts.length===count?o.parcelAmounts.map(x=>Number(x)||0):null;
   const rows=(Array.isArray(o.items)?o.items:[]).map(x=>{
     const qty=Number(x.qty??x.quantity??x.soLuong??1);
     const price=Number(x.price??x.unitPrice??x.donGia??0);
     const lineTotal=Number(x.lineTotal??x.total??qty*price);
     const size=x.size||x.quyCach||x.specification||"";
-    return `<div class="item">
-      <div class="item-main">
-        <div class="plant-name">${safe(itemName(x))}</div>
-        <div class="item-meta">${size?`Quy cách: ${safe(size)} · `:""}SL: ${qty} · Đơn giá: ${money(price)}</div>
-      </div>
-      <b class="item-total">${money(lineTotal)}</b>
-    </div>`;
+    return `<div class="item"><div class="item-main"><div class="plant-name">${safe(itemName(x))}</div><div class="item-meta">${size?`Quy cách: ${safe(size)} · `:""}SL: ${qty} · Đơn giá: ${money(price)}</div></div><b class="item-total">${money(lineTotal)}</b></div>`;
   }).join("");
-  const html=`
-  <article class="ticket" id="ticket">
-    <div class="ticket-content" id="ticketContent">
+  const tickets=(allocations?allocations:[null]).map((amount,index)=>`
+    <article class="ticket" id="ticket-${index}"><div class="ticket-content" id="ticketContent-${index}">
       <header><strong>ROLL CÂY CẢNH</strong><span>ĐƠN NGOÀI</span></header>
       <div class="order-code">${safe(o.orderNo)}</div>
       <div class="line"><b>Người mua:</b> ${safe(o.buyerName)}</div>
       <div class="line"><b>Điện thoại:</b> ${safe(o.buyerPhone)}</div>
       <div class="line address"><b>Địa chỉ:</b> ${safe(o.buyerAddress)}</div>
-      <div class="parcel">SỐ KIỆN: ${Number(o.parcelCount)||1}</div>
-      <div class="items">
-        <div class="items-heading">DANH SÁCH CÂY (${(o.items||[]).length} loại)</div>
-        ${rows||'<div class="empty-items">Không có thông tin sản phẩm</div>'}
-      </div>
-      <div class="sum"><span>Tiền hàng</span><b>${money(o.subtotal)}</b></div>
-      <div class="sum"><span>Vận chuyển</span><b>${money(o.shippingFee)}</b></div>
-      <div class="total"><span>TỔNG BILL</span><b>${money(o.total)}</b></div>
-      <div class="line"><b>Số kiện:</b> ${Number(o.parcelCount)||1}</div>
-      <div class="line"><b>NV đóng hàng:</b> ${safe(o.packerName)}</div>
-      ${o.note?`<div class="note"><b>Ghi chú:</b> ${safe(o.note)}</div>`:""}
+      <div class="parcel">${allocations?`KIỆN ${index+1} / ${count}`:`SỐ KIỆN: ${count}`}</div>
+      <div class="items"><div class="items-heading">DANH SÁCH CÂY (${(o.items||[]).length} loại)</div>${rows||'<div class="empty-items">Không có thông tin sản phẩm</div>'}</div>
+      ${allocations?`<div class="parcel-money"><span>TIỀN KIỆN NÀY</span><b>${money(amount)}</b></div>`:`<div class="sum"><span>Tiền hàng</span><b>${money(o.subtotal)}</b></div><div class="sum"><span>Vận chuyển</span><b>${money(o.shippingFee)}</b></div><div class="total"><span>TỔNG BILL</span><b>${money(o.total)}</b></div>`}
+      <div class="line"><b>NV đóng hàng:</b> ${safe(o.packerName)}</div>${o.note?`<div class="note"><b>Ghi chú:</b> ${safe(o.note)}</div>`:""}
       <footer>Ngày ${safe(o.orderDate)} · ${safe(o.orderNo)}</footer>
-    </div>
-  </article>`;
+    </div></article>`).join("");
   const w=window.open("","_blank","width=520,height=720");
   if(!w){toast("Trình duyệt chặn cửa sổ in. Cho phép pop-up rồi thử lại.");return;}
-  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu đơn ngoài</title><style>
-  @page{size:75mm 100mm;margin:0}
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0;width:75mm;height:100mm;color:#111;font-family:Arial,sans-serif}
-  body{font-size:9pt}
-  .ticket{width:75mm;height:100mm;max-height:100mm;padding:3mm;overflow:hidden;page-break-after:avoid;break-after:avoid}
-  .ticket-content{width:100%;transform-origin:top left}
-  header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222;padding-bottom:1.5mm;font-size:1.05em}
-  .order-code{text-align:center;font-size:1.35em;font-weight:bold;margin:1.5mm 0}
-  .line{margin:1mm 0;line-height:1.2;overflow-wrap:anywhere}
-  .address{overflow-wrap:anywhere}
-  .parcel{text-align:center;font-size:1.35em;font-weight:bold;border:1px solid #111;padding:1.2mm;margin:1.5mm 0}
-  .items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0}
-  .items-heading{font-weight:bold;font-size:.82em;margin-bottom:.8mm}
-  .item{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5mm;padding:.8mm 0;border-top:.2mm dotted #bbb;line-height:1.15;break-inside:avoid}
-  .item-main{min-width:0;flex:1}
-  .plant-name{font-weight:bold;overflow-wrap:anywhere}
-  .item-meta{font-size:.82em;overflow-wrap:anywhere}
-  .item-total{white-space:nowrap;font-size:.9em}
-  .sum,.total{display:flex;justify-content:space-between;gap:2mm;margin:1mm 0}
-  .total{font-size:1.2em;font-weight:bold;border-top:1px solid #111;padding-top:1.2mm}
-  .note{font-size:.85em;margin-top:1mm;overflow-wrap:anywhere}
-  footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:1.5mm;text-align:center;font-size:.78em}
+  w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
+  @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}body{font-size:9pt}
+  .ticket{width:75mm;height:100mm;max-height:100mm;padding:3mm;overflow:hidden;page-break-after:always;break-after:page}.ticket:last-child{page-break-after:avoid;break-after:avoid}.ticket-content{width:100%;transform-origin:top left}
+  header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222;padding-bottom:1.5mm;font-size:1.05em}.order-code{text-align:center;font-size:1.35em;font-weight:bold;margin:1.5mm 0}.line{margin:1mm 0;line-height:1.2;overflow-wrap:anywhere}.parcel{text-align:center;font-size:1.35em;font-weight:bold;border:1px solid #111;padding:1.2mm;margin:1.5mm 0}.items{border-top:1px dashed #777;border-bottom:1px dashed #777;padding:1mm 0;margin:1mm 0}.items-heading{font-weight:bold;font-size:.82em;margin-bottom:.8mm}.item{display:flex;justify-content:space-between;align-items:flex-start;gap:1.5mm;padding:.8mm 0;border-top:.2mm dotted #bbb;line-height:1.15;break-inside:avoid}.item-main{min-width:0;flex:1}.plant-name{font-weight:bold;overflow-wrap:anywhere}.item-meta{font-size:.82em;overflow-wrap:anywhere}.item-total{white-space:nowrap;font-size:.9em}.sum,.total{display:flex;justify-content:space-between;gap:2mm;margin:1mm 0}.total{font-size:1.2em;font-weight:bold;border-top:1px solid #111;padding-top:1.2mm}.parcel-money{border-top:1px solid #111;border-bottom:1px solid #111;padding:2mm 0;margin:2mm 0;display:flex;flex-direction:column;gap:1mm;text-align:center}.parcel-money span{font-size:.9em;font-weight:bold}.parcel-money b{font-size:1.55em}.note{font-size:.85em;margin-top:1mm;overflow-wrap:anywhere}footer{border-top:1px solid #aaa;padding-top:1mm;margin-top:1.5mm;text-align:center;font-size:.78em}
   @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
-  </style></head><body>${html}<script>
-  function fitTicket(){
-    const ticket=document.getElementById("ticket");
-    const content=document.getElementById("ticketContent");
-    if(!ticket||!content)return;
-    content.style.zoom="1";
-    content.style.width="100%";
-    const available=ticket.clientHeight;
-    let scale=1;
-    for(let i=0;i<30;i++){
-      content.style.zoom=String(scale);
-      content.style.width=(100/scale)+"%";
-      const h=content.getBoundingClientRect().height;
-      if(h<=available-2)break;
-      scale*=.94;
-    }
-    content.style.zoom=String(Math.max(.42,scale));
-    content.style.width=(100/Math.max(.42,scale))+"%";
-  }
-  window.onload=()=>{fitTicket();setTimeout(()=>{fitTicket();window.print();},250);};
-  <\/script></body></html>`);
+  </style></head><body>${tickets}<script>
+  function fitTickets(){document.querySelectorAll('.ticket').forEach(ticket=>{const content=ticket.querySelector('.ticket-content');content.style.zoom='1';content.style.width='100%';const available=ticket.clientHeight;let scale=1;for(let i=0;i<30;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.42,scale));content.style.width=(100/Math.max(.42,scale))+'%';});}
+  window.onload=()=>{fitTickets();setTimeout(()=>{fitTickets();window.print();},250);};<\/script></body></html>`);
   w.document.close();
 }
 function resetCatalogForm(){
@@ -368,10 +342,10 @@ $("plantSearch").addEventListener("keydown",e=>{
   }
 });
 document.addEventListener("click",e=>{if(!e.target.closest(".plant-picker"))hidePlantSuggestions();});
-$("addItemBtn").onclick=addItem;$("shippingFee").oninput=totals;$("orderForm").onsubmit=saveOrder;$("resetBtn").onclick=resetForm;
+$("addItemBtn").onclick=addItem;$("shippingFee").oninput=totals;$("parcelCount").addEventListener("input",()=>renderParcelAmountInputs(true));$("orderForm").onsubmit=saveOrder;$("resetBtn").onclick=resetForm;
 $("orderSearch").oninput=renderOrders;$("dateFilter").onchange=renderOrders;$("clearFilter").onclick=()=>{$("dateFilter").value="";$("orderSearch").value="";renderOrders();};
 $("newOrderBtn").onclick=()=>openTab("create");
 $("catalogForm").onsubmit=saveExternalCatalog;$("cancelCatalogEdit").onclick=resetCatalogForm;$("externalCatalogSearch").oninput=renderExternalCatalog;
-$("orderDate").value=today();
+$("orderDate").value=today();renderParcelAmountInputs(false);
 try{initFirebase();}catch(e){message("loginMessage",e.message);}
 })();
