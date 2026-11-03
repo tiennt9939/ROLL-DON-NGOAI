@@ -44,3 +44,15 @@
 
 ### Cập nhật đơn giá
 Ô đơn giá nhập theo nghìn đồng: nhập `100` tương ứng `100.000 đ`. Giá được lưu trong Firestore theo đơn vị đồng (VND); khi chọn giá từ danh mục, giao diện hiển thị theo nghìn đồng.
+
+
+## Sửa chức năng in (03/11/2026)
+
+- Không còn dùng `window.open()` cho phiếu kiện/phiếu cây, do phụ thuộc pop-up của trình duyệt.
+- Khi bấm nút in trong danh sách đơn, website mở bản xem trước ngay trên trang.
+- Từ bản xem trước, bấm **IN NGAY** để gọi hộp thoại in trực tiếp trên iframe cùng nguồn.
+- Giữ khổ giấy 75×100 mm, tự co nội dung để vừa khổ.
+- Phiếu kiện và phiếu cây vẫn là hai chức năng riêng.
+- Ô đơn giá nhập theo nghìn đồng: nhập `100` tương ứng `100.000đ`; dữ liệu lưu Firestore vẫn là VND.
+
+Đã kiểm tra `node --check` và chạy smoke test giả lập DOM: 2 phiếu kiện và 3 phiếu cây được sinh đúng, nút **IN NGAY** gọi `print()` trong cả hai trường hợp.
