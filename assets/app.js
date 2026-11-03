@@ -228,9 +228,9 @@ function productSummary(o){return (o.items||[]).map(x=>`${x.plantName||x.name||x
 function renderOrders(){
   const q=norm($("orderSearch").value),date=$("dateFilter").value;
   const list=orders.filter(o=>(!date||o.orderDate===date)&&(!q||norm([o.orderNo,o.buyerName,o.buyerPhone,productSummary(o)].join(" ")).includes(q)));
-  $("ordersBody").innerHTML=list.length?list.map(o=>{const done=o.packagingCompleted===true;return `<tr class="${done?'order-done':'order-pending'}"><td><b>${safe(o.orderNo)}</b><small class="packing-state ${done?'done':'pending'}">${done?'● Đã đóng gói':'● Chưa hoàn thành'}</small></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}${Array.isArray(o.parcelAmounts)?`<small class="saved-parcel-amounts">${o.parcelAmounts.map((v,i)=>`Kiện ${i+1}: ${money(v)}`).join(" · ")}</small>`:""}</td><td>${safe(o.packerName)}</td><td><div class="order-print-actions"><button class="secondary" data-print="${safe(o.id)}">In phiếu kiện</button><button class="secondary" data-plant-print="${safe(o.id)}">In phiếu cây</button><button class="${done?'secondary':'primary'}" data-toggle-done="${safe(o.id)}">${done?'Bỏ hoàn thành':'Đánh dấu xong'}</button><button class="secondary" data-edit-order="${safe(o.id)}">Sửa đơn</button><button class="danger" data-delete-order="${safe(o.id)}">Xóa đơn</button></div></td></tr>`;}).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
-  $("ordersBody").querySelectorAll("[data-print]").forEach(b=>b.onclick=()=>{const o=orders.find(x=>x.id===b.dataset.print);if(o)printOrder(o);});
-  $("ordersBody").querySelectorAll("[data-plant-print]").forEach(b=>b.onclick=()=>{const o=orders.find(x=>x.id===b.dataset.plantPrint);if(o)printPlantLabels(o);});
+  $("ordersBody").innerHTML=list.length?list.map(o=>{const done=o.packagingCompleted===true;return `<tr class="${done?'order-done':'order-pending'}"><td><b>${safe(o.orderNo)}</b><small class="packing-state ${done?'done':'pending'}">${done?'● Đã đóng gói':'● Chưa hoàn thành'}</small></td><td>${safe(o.orderDate)}</td><td>${safe(o.buyerName)}</td><td>${safe(o.buyerPhone)}</td><td>${safe(productSummary(o)||"—")}</td><td>${o.parcelCount||1}</td><td>${money(o.total)}${Array.isArray(o.parcelAmounts)?`<small class="saved-parcel-amounts">${o.parcelAmounts.map((v,i)=>`Kiện ${i+1}: ${money(v)}`).join(" · ")}</small>`:""}</td><td>${safe(o.packerName)}</td><td><div class="order-print-actions"><button type="button" class="secondary" data-print="${safe(o.id)}">In phiếu kiện</button><button type="button" class="secondary" data-plant-print="${safe(o.id)}">In phiếu cây</button><button class="${done?'secondary':'primary'}" data-toggle-done="${safe(o.id)}">${done?'Bỏ hoàn thành':'Đánh dấu xong'}</button><button class="secondary" data-edit-order="${safe(o.id)}">Sửa đơn</button><button class="danger" data-delete-order="${safe(o.id)}">Xóa đơn</button></div></td></tr>`;}).join(""):'<tr><td colspan="9" class="empty">Không có đơn phù hợp</td></tr>';
+  $("ordersBody").querySelectorAll("[data-print]").forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const o=orders.find(x=>x.id===b.dataset.print);if(o)printOrder(o);});
+  $("ordersBody").querySelectorAll("[data-plant-print]").forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();const o=orders.find(x=>x.id===b.dataset.plantPrint);if(o)printPlantLabels(o);});
   $("ordersBody").querySelectorAll("[data-toggle-done]").forEach(b=>b.onclick=()=>toggleOrderDone(b.dataset.toggleDone));
   $("ordersBody").querySelectorAll("[data-edit-order]").forEach(b=>b.onclick=()=>editOrder(b.dataset.editOrder));
   $("ordersBody").querySelectorAll("[data-delete-order]").forEach(b=>b.onclick=()=>deleteOrder(b.dataset.deleteOrder));
@@ -287,8 +287,15 @@ function printOrder(o){
   @media screen{body{background:#ddd}.ticket{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
   </style></head><body>${tickets}<script>
   function fitTickets(){document.querySelectorAll('.ticket').forEach(ticket=>{const content=ticket.querySelector('.ticket-content');content.style.zoom='1';content.style.width='100%';const available=ticket.clientHeight;let scale=1;for(let i=0;i<30;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.42,scale));content.style.width=(100/Math.max(.42,scale))+'%';});}
-  window.onload=()=>{fitTickets();setTimeout(()=>{fitTickets();window.print();},250);};<\/script></body></html>`);
+  window.fitTickets=fitTickets;<\/script></body></html>`);
   w.document.close();
+  setTimeout(()=>{
+    try{
+      w.focus();
+      if(typeof w.fitTickets==="function")w.fitTickets();
+      if(!w.closed)w.print();
+    }catch(err){toast("Không mở được cửa sổ in. Hãy cho phép cửa sổ bật lên cho website này.");}
+  },600);
 }
 
 function printPlantLabels(o){
@@ -307,8 +314,15 @@ function printPlantLabels(o){
   @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}.label{width:75mm;height:100mm;padding:5mm;overflow:hidden;page-break-after:always;break-after:page;display:block}.label:last-child{page-break-after:avoid;break-after:avoid}.label-content{width:100%;display:flex;flex-direction:column;gap:2.5mm}.brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}.plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:2mm 0}.plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm}.plant-size span,.order-no span,.customer span,.phone span{font-size:8pt;font-weight:bold}.plant-size b{font-size:16pt;overflow-wrap:anywhere}.order-no,.customer,.phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:1.5mm 0}.order-no b{font-size:16pt;overflow-wrap:anywhere}.customer b,.phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}.sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}@media screen{body{background:#ddd}.label{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
   </style></head><body>${pages}<script>
   function fitLabels(){document.querySelectorAll('.label').forEach(label=>{const content=label.querySelector('.label-content');content.style.zoom='1';content.style.width='100%';const available=label.clientHeight;let scale=1;for(let i=0;i<35;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.45,scale));content.style.width=(100/Math.max(.45,scale))+'%';});}
-  window.onload=()=>{fitLabels();setTimeout(()=>{fitLabels();window.print();},250);};<\/script></body></html>`);
+  window.fitLabels=fitLabels;<\/script></body></html>`);
   w.document.close();
+  setTimeout(()=>{
+    try{
+      w.focus();
+      if(typeof w.fitLabels==="function")w.fitLabels();
+      if(!w.closed)w.print();
+    }catch(err){toast("Không mở được cửa sổ in. Hãy cho phép cửa sổ bật lên cho website này.");}
+  },600);
 }
 
 function resetCatalogForm(){
