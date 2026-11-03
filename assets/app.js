@@ -279,7 +279,16 @@ function printOrder(o){
       <footer>Ngày ${safe(o.orderDate)} · ${safe(o.orderNo)}</footer>
     </div></article>`).join("");
   const w=window.open("","_blank","width=520,height=720");
-  if(!w){toast("Trình duyệt chặn cửa sổ in. Cho phép pop-up rồi thử lại.");return;}
+  if(!w){toast("Trình duyệt đang chặn cửa sổ in. Hãy cho phép cửa sổ bật lên (Pop-ups) cho website rồi bấm in lại.");return;}
+  w.addEventListener("load",()=>{
+    setTimeout(()=>{
+      try{
+        w.focus();
+        if(typeof w.fitTickets==="function")w.fitTickets();
+        w.print();
+      }catch(err){toast("Cửa sổ in đã mở nhưng không gọi được lệnh in. Hãy thử Ctrl+P trong cửa sổ phiếu.");}
+    },500);
+  },{once:true});
   w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu kiện</title><style>
   @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}body{font-size:9pt}
   .ticket{width:75mm;height:100mm;max-height:100mm;padding:3mm;overflow:hidden;page-break-after:always;break-after:page}.ticket:last-child{page-break-after:avoid;break-after:avoid}.ticket-content{width:100%;transform-origin:top left}
@@ -289,13 +298,6 @@ function printOrder(o){
   function fitTickets(){document.querySelectorAll('.ticket').forEach(ticket=>{const content=ticket.querySelector('.ticket-content');content.style.zoom='1';content.style.width='100%';const available=ticket.clientHeight;let scale=1;for(let i=0;i<30;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.42,scale));content.style.width=(100/Math.max(.42,scale))+'%';});}
   window.fitTickets=fitTickets;<\/script></body></html>`);
   w.document.close();
-  setTimeout(()=>{
-    try{
-      w.focus();
-      if(typeof w.fitTickets==="function")w.fitTickets();
-      if(!w.closed)w.print();
-    }catch(err){toast("Không mở được cửa sổ in. Hãy cho phép cửa sổ bật lên cho website này.");}
-  },600);
 }
 
 function printPlantLabels(o){
@@ -309,20 +311,22 @@ function printPlantLabels(o){
   if(labels.length>500){toast("Đơn có quá 500 cây. Vui lòng kiểm tra lại số lượng trước khi in.");return;}
   const pages=labels.map((x,index)=>`<article class="label"><div class="label-content"><div class="brand">ROLL CÂY CẢNH · THÔNG TIN CÂY</div><div class="plant-name">${safe(x.name)}</div><div class="plant-size"><span>QUY CÁCH / KÍCH THƯỚC</span><b>${safe(x.size||"Chưa có thông tin")}</b></div><div class="order-no"><span>MÃ ĐƠN</span><b>${safe(o.orderNo||"")}</b></div><div class="customer"><span>KHÁCH HÀNG</span><b>${safe(o.buyerName||"")}</b></div><div class="phone"><span>SỐ ĐIỆN THOẠI</span><b>${safe(o.buyerPhone||"Chưa có số điện thoại")}</b></div><div class="sequence">CÂY ${index+1} / ${labels.length}</div></div></article>`).join("");
   const w=window.open("","_blank","width=520,height=720");
-  if(!w){toast("Trình duyệt chặn cửa sổ in. Cho phép pop-up rồi thử lại.");return;}
+  if(!w){toast("Trình duyệt đang chặn cửa sổ in. Hãy cho phép cửa sổ bật lên (Pop-ups) cho website rồi bấm in lại.");return;}
+  w.addEventListener("load",()=>{
+    setTimeout(()=>{
+      try{
+        w.focus();
+        if(typeof w.fitLabels==="function")w.fitLabels();
+        w.print();
+      }catch(err){toast("Cửa sổ in đã mở nhưng không gọi được lệnh in. Hãy thử Ctrl+P trong cửa sổ phiếu.");}
+    },500);
+  },{once:true});
   w.document.write(`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${safe(o.orderNo)} - Phiếu cây</title><style>
   @page{size:75mm 100mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:75mm;color:#111;font-family:Arial,sans-serif}.label{width:75mm;height:100mm;padding:5mm;overflow:hidden;page-break-after:always;break-after:page;display:block}.label:last-child{page-break-after:avoid;break-after:avoid}.label-content{width:100%;display:flex;flex-direction:column;gap:2.5mm}.brand{text-align:center;font-size:9pt;font-weight:bold;border-bottom:1px solid #222;padding-bottom:2mm}.plant-name{text-align:center;font-size:19pt;font-weight:800;line-height:1.15;overflow-wrap:anywhere;margin:2mm 0}.plant-size{border:1.5px solid #111;padding:3mm;text-align:center;display:flex;flex-direction:column;gap:2mm}.plant-size span,.order-no span,.customer span,.phone span{font-size:8pt;font-weight:bold}.plant-size b{font-size:16pt;overflow-wrap:anywhere}.order-no,.customer,.phone{display:flex;flex-direction:column;gap:1mm;border-bottom:1px dashed #777;padding:1.5mm 0}.order-no b{font-size:16pt;overflow-wrap:anywhere}.customer b,.phone b{font-size:12pt;overflow-wrap:anywhere;word-break:break-word}.sequence{margin-top:auto;text-align:center;font-size:9pt;font-weight:bold;border-top:1px solid #222;padding-top:2mm}@media screen{body{background:#ddd}.label{background:white;margin:8px auto;box-shadow:0 2px 12px #0003}}
   </style></head><body>${pages}<script>
   function fitLabels(){document.querySelectorAll('.label').forEach(label=>{const content=label.querySelector('.label-content');content.style.zoom='1';content.style.width='100%';const available=label.clientHeight;let scale=1;for(let i=0;i<35;i++){content.style.zoom=String(scale);content.style.width=(100/scale)+'%';if(content.getBoundingClientRect().height<=available-2)break;scale*=.94;}content.style.zoom=String(Math.max(.45,scale));content.style.width=(100/Math.max(.45,scale))+'%';});}
   window.fitLabels=fitLabels;<\/script></body></html>`);
   w.document.close();
-  setTimeout(()=>{
-    try{
-      w.focus();
-      if(typeof w.fitLabels==="function")w.fitLabels();
-      if(!w.closed)w.print();
-    }catch(err){toast("Không mở được cửa sổ in. Hãy cho phép cửa sổ bật lên cho website này.");}
-  },600);
 }
 
 function resetCatalogForm(){
