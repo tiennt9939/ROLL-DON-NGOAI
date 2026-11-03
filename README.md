@@ -45,15 +45,25 @@
 ### Cập nhật đơn giá
 Ô đơn giá nhập theo nghìn đồng: nhập `100` tương ứng `100.000 đ`. Giá được lưu trong Firestore theo đơn vị đồng (VND); khi chọn giá từ danh mục, giao diện hiển thị theo nghìn đồng.
 
-## Khôi phục cơ chế in ban đầu (03/11/2026)
+## Sửa in nhãn theo số cây và tương thích iPhone (03/11/2026)
 
-- Đã bỏ hoàn toàn màn hình xem trước dùng `iframe`.
-- Đã bỏ thuật toán tự co nội dung bằng `zoom` và các thay đổi căn trang phát sinh sau đó.
-- Khôi phục cách in của bản đầu: bấm nút sẽ mở cửa sổ in riêng bằng `window.open()`, nội dung phiếu được dựng trực tiếp trong cửa sổ đó và gọi hộp thoại in.
-- Mỗi phiếu dùng đúng `@page{size:75mm 100mm;margin:0}`, nội dung trang rộng 75 mm, cao 100 mm; bố cục phiếu kiện dùng lại kiểu flex dọc của bản đầu.
-- Phiếu kiện mới vẫn in số tiền đã phân bổ riêng cho từng kiện. Đơn cũ chưa có dữ liệu phân bổ tiếp tục in một phiếu tổng, không tự chia tiền.
-- Phiếu cây in một phiếu cho mỗi dòng cây/sản phẩm trong đơn, không nhân phiếu theo số lượng từng cây.
-- Hai luồng in phiếu kiện và phiếu cây đều dùng cùng cơ chế cửa sổ in ban đầu.
-- Trình duyệt cần cho phép pop-up từ website để cửa sổ in riêng được mở.
+- Không mở cửa sổ/tab mới (`window.open`) và không dùng iframe. Cả phiếu kiện và phiếu cây được dựng trong trang hiện tại rồi gọi `window.print()` trực tiếp từ thao tác bấm của người dùng, tránh lỗi popup bị Safari trên iPhone chặn.
+- Sau khi bấm in, website hiển thị bản xem phiếu ngay trong trang; nếu hộp thoại in không tự hiện, người dùng có thể bấm nút **IN PHIẾU** ngay trên màn hình đó. Có nút **ĐÓNG** để quay lại danh sách đơn.
+- Phiếu cây tạo **một nhãn cho mỗi cây thực tế**, lặp theo số lượng `qty` / `quantity` / `soLuong` / `count` của từng dòng sản phẩm. Ví dụ 2 dòng có số lượng 2 và 3 sẽ sinh 5 nhãn, đánh số CÂY 1/5 đến CÂY 5/5.
+- Phiếu kiện vẫn giữ nguyên logic: đơn có `parcelAmounts` hợp lệ thì in một phiếu cho mỗi kiện và hiển thị tiền riêng của kiện đó; đơn cũ chưa có dữ liệu phân bổ tiếp tục in một phiếu tổng, không tự suy đoán cách chia tiền.
+- Giữ kích thước trang CSS `@page{size:75mm 100mm;margin:0}`. Trình điều khiển/máy in vẫn cần chọn đúng khổ giấy 75×100 mm khi hệ điều hành có yêu cầu.
+- Không thay đổi Firestore schema, danh mục, đơn hàng, phân bổ tiền theo kiện hay dữ liệu app ROLL CÂY CẢNH.
 
-Đã kiểm tra cú pháp JavaScript bằng `node --check` và kiểm tra HTML đầu ra bằng test giả lập: không còn iframe/zoom; trang in khai báo kích thước 75×100 mm; số phiếu kiện được tạo theo số kiện có dữ liệu phân bổ; số phiếu cây bằng số dòng cây trong đơn. Chưa có trình duyệt Chrome thực tế trong môi trường build để xác nhận bản PDF in vật lý.
+Đã kiểm tra cú pháp JavaScript bằng `node --check`; mã in không còn `window.open()`; hàm tạo nhãn lặp theo số lượng từng dòng và tạo trang riêng 75×100 mm. Đã kiểm tra bằng trình duyệt Chromium headless với đơn thử có tổng 5 cây để xác nhận số trang PDF. Chưa thể kiểm thử trực tiếp trên iPhone hoặc máy in vật lý trong môi trường này.
+
+
+## Quy tắc tách riêng phiếu kiện và phiếu cây (03/11/2026)
+
+- **Phiếu kiện**: số phiếu chỉ căn cứ vào số kiện (`parcelCount`); mỗi kiện một phiếu. Tiền trên phiếu kiện lấy theo `parcelAmounts` đã lưu.
+- **Phiếu cây**: số phiếu chỉ căn cứ vào tổng số lượng cây của toàn bộ dòng sản phẩm trong đơn (`qty` / `quantity` / `soLuong` / `count`). Mỗi cây thực tế một phiếu; không chia, lọc hoặc nhân theo số kiện (`parcelCount` / `parcelAmounts`).
+- Ví dụ: đơn có tổng 6 cây, gồm 2 loại (2 cây + 4 cây), đóng thành 2 kiện: in phiếu kiện được 2 phiếu; chọn in phiếu cây được 6 phiếu. Nếu 6 cây cùng loại cũng vẫn được 6 phiếu cây.
+- Hai nút **In phiếu kiện** và **In phiếu cây** thực hiện độc lập; bấm nút nào chỉ tạo loại phiếu đó.
+- In trực tiếp trong trang hiện tại, không mở popup hoặc tab mới; bố cục từng trang vẫn khai báo 75×100 mm.
+
+### Kiểm tra logic phiếu cây
+Đã chạy kiểm tra tự động với các mẫu: 2 loại cây số lượng 2+4 (2 kiện), cùng loại ở hai dòng số lượng 1+5 (3 kiện), và dữ liệu legacy dùng trường `quantity` / `soLuong` / `count`. Cả ba đều sinh đúng 6 trang nhãn. Kiểm tra cú pháp JavaScript bằng `node --check` thành công. Chưa kiểm thử trực tiếp trên iPhone hoặc máy in vật lý.
